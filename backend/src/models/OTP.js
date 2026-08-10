@@ -14,7 +14,7 @@ const optSchema = new mongoose.Schema({
     lowercase: true,
     trim: true,
   },
-  opthash: {
+  otpHash: {
     type: String,
     required: true,
   },
@@ -43,4 +43,4 @@ optSchema.index({
 });
 
 const OTP = mongoose.model("OTP", optSchema);
-export const OTP;
+export default OTP;

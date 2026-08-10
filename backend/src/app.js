@@ -8,7 +8,7 @@ import compression from "compression";
 
 
 //routes
-
+import authRoutes from "./routes/auth.routes.js";
 
 
 
@@ -16,6 +16,7 @@ import compression from "compression";
 
 
 const app = express();
+app.use(express.json({ limit: "1mb" }));
 app.set("trust proxy", 1);
 app.use(helmet());
 const clientOrigin = process.env.CLIENT_URL ? process.env.CLIENT_URL.replace(/\/$/, "") :
@@ -35,11 +36,14 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 app.use(morgan("dev"));
-app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
 app.use(express.urlencoded
   ({ extended: true, limit: "1mb" })
 );
+
+app.use("/api/auth", authRoutes);
+
+
 
 app.get("/", (req, res) => {
   res.status(200).json({

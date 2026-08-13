@@ -9,6 +9,7 @@ import compression from "compression";
 
 //routes
 import authRoutes from "./routes/auth.routes.js";
+import { globalMiddleware } from "./middlewares/global.middleware.js";
 
 
 
@@ -51,5 +52,6 @@ app.get("/", (req, res) => {
     message: "SecurePass backend is working.......",
   });
 });
+app.use(globalMiddleware);
 
 export default app;

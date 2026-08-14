@@ -20,7 +20,7 @@ const userSchema = new mongoose.Schema({
   password: {
     type: String,
     required: true,
-    trim: true,
+    select: false,
   },
   isVerified: {
     type: Boolean,
@@ -52,6 +52,7 @@ userSchema.pre("save", async function (next) {
     return;
   }
   this.password = await bcrypt.hash(this.password, Number(process.env.BCRYPT_SALT_ROUNDS));
+
 });
 
 const User = mongoose.model("User", userSchema);

@@ -175,7 +175,7 @@ class AuthService {
     return {
       message: AUTH_MESSAGES.LOGIN_SUCCESS,
       data: {
-        accessToken, refreshToken,
+        accessToken,
         user: {
           id: user._id,
           name: user.name,

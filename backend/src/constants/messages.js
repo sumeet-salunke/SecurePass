@@ -50,6 +50,6 @@ export const AUTH_MESSAGES = Object.freeze({
   INVALID_OR_EXPIRED_OTP: "Invalid or expired OTP.",
   UNAUTHORIZED: "Authentication required.",
   INVALID_ACCCESS_TOKEN: "Invalid or expired access token.",
+  OTP_RESEND_COOLDOWN: "If account exists,ans OTP is sent to your existing email and, "
 
-
-})
+});

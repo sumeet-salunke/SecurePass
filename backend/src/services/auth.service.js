@@ -140,6 +140,59 @@ class AuthService {
     };
   }
 
+  async resendOTP(data) {
+    const { email } = data;
+    //1. find user
+    const user = await userRepository.findByEmail(email);
+
+    if (!user) {
+      throw new ApiError(404, AUTH_MESSAGES.USER_NOT_FOUND
+      );
+    }
+    //2. check already verified?
+    if (user.isVerified) {
+      throw new ApiError(409, AUTH_MESSAGES.EMAIL_ALREADY_VERIFIED);
+    }
+    //3. find active otp
+    const otpRecord = await otpReposiory.findActiveOTP(user._id, OTP_PURPOSE.VERIFY_ACCOUNT);
+    //4. active otp exists
+    if (otpRecord) {
+      //5. check cooldown
+      const cooldownEndsAt = new Date(otpRecord.createdAt.getTime() + OTP_CONFIG.RESEND_COOLDOWN_SECONDS * 1000);
+      //6. still within cooldown
+      if (cooldownEndsAt > new Date()) {
+        const remainingSeconds = Math.ceil((cooldownEndsAt.getTime() - Date.now()) / 1000);
+        throw new ApiError(429, `${AUTH_MESSAGES.OTP_RESEND_COOLDOWN} ${remainingSeconds} seconds`);
+      }
+      //7. cooldown expired - invalidate old OTP
+      await otpReposiory.consumeOTP(otpRecord._id);
+    }
+    //8.generate new OPT
+    const otp = generateOTP();
+    //9. hash otp
+    const otpHash = await bcrypt.hash(otp, Number(process.env.BCRYPT_SALT_ROUNDS));
+    //10. save new otp
+    await otpReposiory.create({
+      userId: user._id,
+      email,
+      otpHash,
+      purpose: OTP_PURPOSE.VERIFY_ACCOUNT,
+      expiresAt: new Date(Date.now() + OTP_CONFIG.EXPIRY_MINUTES * 60 * 1000),
+    });
+    //11. send email
+    await sendMail({
+      to: email,
+      subject: "Verify your account",
+      html: otpTemplate(user.name, otp),
+    });
+    logger.info(`OTP resent for user: ${user._id}`);
+    return {
+      message: AUTH_MESSAGES.OTP_SENT,
+      data: null,
+    }
+  }
+
+
 
 
   async login(data) {

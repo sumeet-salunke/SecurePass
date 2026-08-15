@@ -16,6 +16,11 @@ export const verifyOTP = asyncHandler(async (req, res) => {
   return res.status(200).json(new ApiResponse(200, result.message, result.data));
 });
 
+export const resendOTP = asyncHandler(async (req, res) => {
+  const result = await authService.resendOTP(req.body);
+  return res.status(200).json(new ApiResponse(200, result.message, result.data));
+});
+
 export const login = asyncHandler(async (req, res) => {
   const result = await authService.login(req.body);
   return res.status(200).json(new ApiResponse(200, result.message, result.data));

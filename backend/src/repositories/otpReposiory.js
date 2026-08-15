@@ -2,9 +2,7 @@ import OTP from "../models/OTP.js";
 
 class OTPRepository {
   async create(data, session = null) {
-    console.log("Data", data);
     const [otp] = await OTP.create([data], { session });
-    console.log("OTP created", otp);
     return otp;
   }
   async findActiveOTP(userId, purpose) {
@@ -27,6 +25,22 @@ class OTPRepository {
 
   async updateById(id, updateData) {
     return await OTP.findByIdAndUpdate(id, updateData, { new: true });
+  }
+  async consumeOTP(id) {
+    return await OTP.findOneAndUpdate({
+      _id: id, isUsed: false
+    }, {
+      $set: {
+        isUsed: true
+      }
+    }, { new: true });
+  }
+  async incrementAttempts(id) {
+    return await OTP.findOneAndUpdate({ _id: id, isUsed: false }, {
+      $inc: {
+        attempts: 1
+      }
+    }, { new: true })
   }
 
 

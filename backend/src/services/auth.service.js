@@ -16,7 +16,7 @@ import { generateAccessToken, generateRefreshToken, generateTokens } from "../ut
 import userRepository from "../repositories/user.repository.js";
 import otpReposiory from "../repositories/otpReposiory.js";
 import refreshTokenRepository from "../repositories/refreshToken.repository.js";
-
+import { OTP_CONFIG } from "../constants/constants.js";
 
 class AuthService {
 
@@ -91,42 +91,56 @@ class AuthService {
 
   async verifyOTP(data) {
     const { email, otp } = data;
-    //find user
+    //1. find user
     const user = await userRepository.findByEmail(email);
+
     if (!user) {
       throw new ApiError(404, AUTH_MESSAGES.USER_NOT_FOUND);
     }
-    //already verified
+    //2. already verified or prevent unnecessary verification
     if (user.isVerified) {
       throw new ApiError(409, AUTH_MESSAGES.EMAIL_ALREADY_VERIFIED);
     }
-    //find active otp
+    //3. find active otp
     const otpRecord = await otpReposiory.findActiveOTP(user._id, OTP_PURPOSE.VERIFY_ACCOUNT);
     if (!otpRecord) {
-      throw new ApiError(400, AUTH_MESSAGES.INVALID_OTP);
+      throw new ApiError(400, AUTH_MESSAGES.INVALID_OR_EXPIRED_OTP);
     }
-    //otp expired
-    if (otpRecord.expiresAt < new Date()) {
-      throw new ApiError(404, AUTH_MESSAGES.OTP_EXPIRED);
+    //4. otp expired
+    if (otpRecord.expiresAt <= new Date()) {
+      throw new ApiError(404, AUTH_MESSAGES.INVALID_OR_EXPIRED_OTP);
     }
-    //compare otp
+    //5. check maximum attempts
+    if (otpRecord.attempts >= OTP_CONFIG.MAX_OTP_ATTEMPTS) {
+      await otpReposiory.consumeOTP(otpRecord._id);
+      throw new ApiError(400, AUTH_MESSAGES.INVALID_OR_EXPIRED_OTP);
+    }
+    //6. compare  submitted OTP with stored hash
     const isValid = await bcrypt.compare(otp, otpRecord.otpHash);
+    //7. wrong OTP
     if (!isValid) {
-      await otpReposiory.updateById(otpRecord._id, {
-        attempts: otpRecord.attempts + 1
-      });
-      throw new ApiError(400, AUTH_MESSAGES.INVALID_OTP);
+      await otpReposiory.incrementAttempts(otpRecord._id);
+      throw new ApiError(400, AUTH_MESSAGES.INVALID_OR_EXPIRED_OTP
+      );
     }
-    //mark otp used
-    await otpReposiory.updateById(otpRecord._id, { isUsed: true });
-    //verify user
+    //8. mark otp used or automatically consume OTP
+    const consumedOTP = await otpReposiory.consumeOTP(otpRecord._id);
+    //another request may have consumed it
+    if (!consumedOTP) {
+      throw new ApiError(400, AUTH_MESSAGES.INVALID_OR_EXPIRED_OTP);
+    }
+    //9. verify user
     await userRepository.updateById(user._id, { isVerified: true });
+
     logger.info(`Email verified: ${email}`);
+
     return {
       message: AUTH_MESSAGES.OTP_VERIFIED,
       data: null,
     };
   }
+
+
 
   async login(data) {
     const { email, password } = data;
@@ -186,6 +200,8 @@ class AuthService {
     }
 
   }
+
+
 }
 
 export default new AuthService();

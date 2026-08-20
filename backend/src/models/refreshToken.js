@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+
 const refreshTokenSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -6,25 +7,33 @@ const refreshTokenSchema = new mongoose.Schema({
     required: true,
     index: true,
   },
-  token: {
+
+  tokenHash: {
     type: String,
     required: true,
     index: true,
+  },
+
+  tokenVersion: {
+    type: Number,
+    required: true,
+  },
+
+  jti: {
+    type: String,
+    required: true,
+    unique: true,
   },
   isRevoked: {
     type: Boolean,
     default: false,
   },
   expiresAt: {
-    type: Date, required: true, index: true
+    type: Date,
+    required: true,
+    index: true
   }
 }, { timestamps: true });
-refreshTokenSchema.index({
-  userId: 1,
-  token: 1,
-});
-refreshTokenSchema.index({
-  token: 1, isRevoked: 1
-});
+
 const RefreshToken = mongoose.model("RefreshToken", refreshTokenSchema);
 export default RefreshToken;

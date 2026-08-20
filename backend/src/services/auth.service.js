@@ -17,6 +17,7 @@ import userRepository from "../repositories/user.repository.js";
 import otpReposiory from "../repositories/otpReposiory.js";
 import refreshTokenRepository from "../repositories/refreshToken.repository.js";
 import { OTP_CONFIG } from "../constants/constants.js";
+import { hashRefreshToken } from "../utils/hashRefreshToken.js";
 
 class AuthService {
 
@@ -233,11 +234,14 @@ class AuthService {
       loginAttempts: 0, lockUntil: null
     });
     //generate tokens
-    const { accessToken, refreshToken } = generateTokens(user);
+    const { accessToken, refreshToken, jti } = generateTokens(user);
+    const tokenHash = hashRefreshToken(refreshToken);
+
     //store refresh token
     const expiry = new Date();
     expiry.setDate(expiry.getDate() + 7);
-    await refreshTokenRepository.create({ userId: user._id, token: refreshToken, expiresAt: expiry });
+
+    await refreshTokenRepository.create({ userId: user._id, tokenHash, tokenVersion: user.tokenVersion ?? 0, jti, expiresAt: expiry });
 
     return {
       message: AUTH_MESSAGES.LOGIN_SUCCESS,
@@ -249,8 +253,9 @@ class AuthService {
           email: user.email,
           isVerified: user.isVerified
         }
-      }
-    }
+      },
+      refreshToken,
+    };
 
   }
 

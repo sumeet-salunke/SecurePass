@@ -23,5 +23,8 @@ export const resendOTP = asyncHandler(async (req, res) => {
 
 export const login = asyncHandler(async (req, res) => {
   const result = await authService.login(req.body);
+  res.cookie(
+    "refreshToken", result.refreshToken, cookieOptions
+  );
   return res.status(200).json(new ApiResponse(200, result.message, result.data));
 });

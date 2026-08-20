@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
 
 const generateAccessToken = (user) => {
   return jwt.sign({
@@ -10,19 +11,24 @@ const generateAccessToken = (user) => {
 };
 
 const generateRefreshToken = (user) => {
-  return jwt.sign({
+  const jti = crypto.randomUUID();
+
+  const token = jwt.sign({
     userId: user._id,
-    tokenVersion: user.tokenVersion ?? 0
-  },
-    process.env.JWT_REFRESH_SECRET, {
-    expiresIn: process.env.REFRESH_TOKEN_EXPIRY
+    tokenVersion: user.tokenVersion ?? 0,
+    jti,
+  }, process.env.JWT_REFRESH_SECRET, {
+    expiresIn: process.env.REFRESH_TOKEN_EXPIRY,
   });
+  return {
+    token, jti,
+  };
 };
 
 const generateTokens = (user) => {
   const accessToken = generateAccessToken(user);
-  const refreshToken = generateRefreshToken(user);
-  return { accessToken, refreshToken };
+  const { token: refreshToken, jti } = generateRefreshToken(user);
+  return { accessToken, refreshToken, jti };
 };
 
 export { generateAccessToken, generateRefreshToken, generateTokens };

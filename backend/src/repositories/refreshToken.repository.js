@@ -7,13 +7,13 @@ class RefreshTokenRepository {
     return refreshToken;
   }
 
-  async findByTokenHash() {
+  async findByTokenHash(tokenHash) {
     return await RefreshToken.findOne({
-      tokenHash, isRevoked: false,
+      tokenHash,
     });
   }
 
-  async revokeBYId(id) {
+  async revokeById(id) {
     return await RefreshToken.findByIdAndUpdate({
       _id: id, isRevoked: false,
     }, {

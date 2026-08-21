@@ -193,9 +193,6 @@ class AuthService {
     }
   }
 
-
-
-
   async login(data) {
     const { email, password } = data;
     //find user
@@ -259,6 +256,82 @@ class AuthService {
 
   }
 
+  async refreshToken(cookies) {
+    const { refreshToken } = cookies || {};
+    //1. refresh token must exist
+    if (!refreshToken) {
+      throw new ApiError(401, AUTH_MESSAGES.UNAUTHORIZED);
+    }
+    //2. verify JWT
+    let payload;
+    try {
+      payload = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+    } catch (error) {
+      throw new ApiError(401, AUTH_MESSAGES.UNAUTHORIZED);
+    }
+    //3. extract JWT payload
+    const {
+      userId, tokenVersion, jti
+    } = payload;
+    //4. hash incoming refreshtoken
+    const tokenHash = hashRefreshToken(refreshToken);
+    //5. find token record
+    const storedToken = await refreshTokenRepository.findByTokenHash(tokenHash);
+    if (!storedToken) {
+      throw new ApiError(401, AUTH_MESSAGES.UNAUTHORIZED);
+    }
+    //6. Detect revoked token
+    if (storedToken.isRevoked) {
+      //securtiy event
+
+      throw new ApiError(401, AUTH_MESSAGES.UNAUTHORIZED);
+    }
+    //7. verify JTI matches
+    if (storedToken.jti !== jti) {
+      throw new ApiError(401, AUTH_MESSAGES.UNAUTHORIZED);
+    }
+    //8. check expiration
+    if (storedToken.expiresAt <= new Date()) {
+      throw new ApiError(401, AUTH_MESSAGES.UNAUTHORIZED);
+    }
+    //9. Find User
+    const user = await userRepository.findById(userId);
+    if (!user) {
+      throw new ApiError(401, AUTH_MESSAGES.UNAUTHORIZED);
+    }
+    //10. check token version
+    if (storedToken.tokenVersion !== user.tokenVersion || tokenVersion !== user.tokenVersion) {
+      throw new ApiError(401, AUTH_MESSAGES.UNAUTHORIZED);
+    }
+    //11.revoke old refresh token
+    const revokedToken = await refreshTokenRepository.revokeById(storedToken._id);
+    if (!revokedToken) {
+      throw new ApiError(401, AUTH_MESSAGES.UNAUTHORIZED);
+    }
+    //12. generate new tokens
+    const {
+      accessToken, refreshToken: newRefreshToken, jti: newJti
+    } = generateTokens(user);
+    //13. hash new refresh token
+    const newTokenHash = hashRefreshToken(newRefreshToken);
+    //14. calculate expiry
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+    //15. store new refresh token 
+    await refreshTokenRepository.create({
+      userId: user._id,
+      tokenHash: newTokenHash,
+      tokenVersion: user.tokenVersion,
+      jti: newJti,
+      expiresAt
+    });
+    //16. return tokens
+    return {
+      message: AUTH_MESSAGES.TOKEN_REFRESH_SUCCESS,
+      accessToken, refreshToken: newRefreshToken,
+    };
+
+  }
 
 }
 

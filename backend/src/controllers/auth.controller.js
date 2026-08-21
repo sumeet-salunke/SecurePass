@@ -28,3 +28,16 @@ export const login = asyncHandler(async (req, res) => {
   );
   return res.status(200).json(new ApiResponse(200, result.message, result.data));
 });
+
+export const refreshToken = asyncHandler(async (req, res) => {
+  console.log("COOKIE KEYS:", Object.keys(req.cookies || {}));
+  console.log("HAS REFRESH TOKEN:", Boolean(req.cookies?.refreshToken));
+  const result = await authService.refreshToken(req.cookies);
+  res.cookie("refreshToken",
+    result.refreshToken,
+    cookieOptions
+  );
+  return res.status(200).json(new ApiResponse(200, result.message, {
+    accessToken: result.accessToken,
+  }));
+});

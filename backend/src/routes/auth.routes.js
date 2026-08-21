@@ -2,7 +2,7 @@ import express from "express";
 import rateLimit from "express-rate-limit";
 
 import { registerSchema, verifyOTPSchema, loginSchema } from "../validations/auth.validation.js";
-import { register, verifyOTP, login, resendOTP } from "../controllers/auth.controller.js";
+import { register, verifyOTP, login, resendOTP, refreshToken } from "../controllers/auth.controller.js";
 import validate from "../middlewares/validate.middleware.js";
 
 
@@ -23,5 +23,9 @@ router.post("/resend-otp", sensitiveAuthLimiter, resendOTP);
 
 router.post("/login", sensitiveAuthLimiter, validate(loginSchema), login);
 
+router.post("/refresh", (req, res, next) => {
+  console.log("REFRESH ROUTE HIT");
+  next();
+}, refreshToken);
 
 export default router;

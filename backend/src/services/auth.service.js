@@ -283,6 +283,8 @@ class AuthService {
     //6. Detect revoked token
     if (storedToken.isRevoked) {
       //securtiy event
+      logger.warn(`Refresh token reuse detected for user: ${storedToken.userId}`);
+      await refreshTokenRepository.revokeAllActiveByUserId(storedToken.userId);
 
       throw new ApiError(401, AUTH_MESSAGES.UNAUTHORIZED);
     }

@@ -22,6 +22,15 @@ class RefreshTokenRepository {
       }
     }, { new: true });
   }
+  async revokeAllActiveByUserId(userId) {
+    return await RefreshToken.updateMany({
+      userId, isRevoked: false
+    }, {
+      $set: {
+        isRevoked: true,
+      }
+    })
+  }
 
   /*
   

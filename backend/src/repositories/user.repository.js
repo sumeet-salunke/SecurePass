@@ -26,6 +26,9 @@ class UserRepository {
   async updateById(userId, updateData) {
     return await User.findByIdAndUpdate(userId, updateData, { new: true });
   }
+  async findAuthUserById(userId) {
+    return await User.findById(userId).select("isVerified isActive passwordChangedAt tokenVersion");
+  }
 }
 
 

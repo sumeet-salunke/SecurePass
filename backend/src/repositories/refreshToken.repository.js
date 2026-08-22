@@ -42,6 +42,13 @@ class RefreshTokenRepository {
     })
   }
 
+  async findActiveSessions(userId) {
+    return await RefreshToken.find({
+      userId, isRevoked: false
+    }).select("familyId createdAt expiresAt")
+      .sort({ createdAt: -1 });
+  }
+
   /*
   
     async findByToken(token) {

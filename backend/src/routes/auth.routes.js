@@ -2,9 +2,9 @@ import express from "express";
 import rateLimit from "express-rate-limit";
 
 import { registerSchema, verifyOTPSchema, loginSchema } from "../validations/auth.validation.js";
-import { register, verifyOTP, login, resendOTP, refreshToken } from "../controllers/auth.controller.js";
+import { register, verifyOTP, login, resendOTP, refreshToken, getSessions } from "../controllers/auth.controller.js";
 import validate from "../middlewares/validate.middleware.js";
-
+import { authenticate } from "../middlewares/auth.middleware.js";
 
 const router = express.Router();
 const sensitiveAuthLimiter = rateLimit({
@@ -27,5 +27,7 @@ router.post("/refresh", (req, res, next) => {
   console.log("REFRESH ROUTE HIT");
   next();
 }, refreshToken);
+
+router.get("/sessions", authenticate, getSessions);
 
 export default router;

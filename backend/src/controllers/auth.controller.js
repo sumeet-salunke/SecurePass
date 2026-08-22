@@ -41,3 +41,8 @@ export const refreshToken = asyncHandler(async (req, res) => {
     accessToken: result.accessToken,
   }));
 });
+
+export const getSessions = asyncHandler(async (req, res) => {
+  const result = await authService.getSessions(req.user.id);
+  return res.status(200).json(new ApiResponse(200, result.message, result.data));
+});

@@ -42,6 +42,7 @@ export const AUTH_MESSAGES = Object.freeze({
   REFRESH_TOKEN_REQUIRED: "Refresh token is required.",
   INVALID_REFRESH_TOKEN: "Invalid or expired refresh token.",
   SESSION_EXPIRED: "Session expired. Please login again.",
+  TOKEN_EXPIRED: "Token expired",
   TOKEN_REFRESH_SUCCESS: "Access token refreshed successfully",
   PASSWORD_RESET_OTP_SENT: "If an account exists with this email, a password reset OTP has been sent.",
 
@@ -50,6 +51,7 @@ export const AUTH_MESSAGES = Object.freeze({
   INVALID_OR_EXPIRED_OTP: "Invalid or expired OTP.",
   UNAUTHORIZED: "Authentication required.",
   INVALID_ACCCESS_TOKEN: "Invalid or expired access token.",
-  OTP_RESEND_COOLDOWN: "If account exists,ans OTP is sent to your existing email and, "
+  OTP_RESEND_COOLDOWN: "If account exists,ans OTP is sent to your existing email and, ",
+  SESSIONS_FETCHED: "Active sessions fetched successfully",
 
 });

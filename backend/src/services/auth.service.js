@@ -342,6 +342,20 @@ class AuthService {
 
   }
 
+  async getSessions(userId) {
+    const sessions = await refreshTokenRepository.findActiveSessions(userId);
+    return {
+      message: AUTH_MESSAGES.SESSIONS_FETCHED,
+      data: {
+        sessions: sessions.map((session) => ({
+          id: session.familyId,
+          createdAt: session.createdAt,
+          expiresAt: session.expiresAt
+        })),
+      },
+    };
+
+  }
 }
 
 export default new AuthService();

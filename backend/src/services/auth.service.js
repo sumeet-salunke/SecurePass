@@ -214,6 +214,7 @@ class AuthService {
     }
     //compare password  
     const isPasswordMatched = await bcrypt.compare(password, user.password);
+
     if (!isPasswordMatched) {
       const attempts = user.loginAttempts + 1;
       const updateData = { loginAttempts: attempts };
@@ -231,14 +232,14 @@ class AuthService {
       loginAttempts: 0, lockUntil: null
     });
     //generate tokens
-    const { accessToken, refreshToken, jti } = generateTokens(user);
+    const { accessToken, refreshToken, jti, familyId } = generateTokens(user);
     const tokenHash = hashRefreshToken(refreshToken);
 
     //store refresh token
     const expiry = new Date();
     expiry.setDate(expiry.getDate() + 7);
 
-    await refreshTokenRepository.create({ userId: user._id, tokenHash, tokenVersion: user.tokenVersion ?? 0, jti, expiresAt: expiry });
+    await refreshTokenRepository.create({ userId: user._id, tokenHash, tokenVersion: user.tokenVersion ?? 0, jti, familyId, expiresAt: expiry });
 
     return {
       message: AUTH_MESSAGES.LOGIN_SUCCESS,
@@ -271,7 +272,7 @@ class AuthService {
     }
     //3. extract JWT payload
     const {
-      userId, tokenVersion, jti
+      userId, tokenVersion, jti, familyId
     } = payload;
     //4. hash incoming refreshtoken
     const tokenHash = hashRefreshToken(refreshToken);
@@ -283,13 +284,17 @@ class AuthService {
     //6. Detect revoked token
     if (storedToken.isRevoked) {
       //securtiy event
-      logger.warn(`Refresh token reuse detected for user: ${storedToken.userId}`);
-      await refreshTokenRepository.revokeAllActiveByUserId(storedToken.userId);
+      logger.warn(`Refresh token reuse detected | userId: ${storedToken.userId}| familyId: ${storedToken.familyId}`);
+      await refreshTokenRepository.revokeFamily(storedToken.familyId);
 
       throw new ApiError(401, AUTH_MESSAGES.UNAUTHORIZED);
     }
     //7. verify JTI matches
     if (storedToken.jti !== jti) {
+      throw new ApiError(401, AUTH_MESSAGES.UNAUTHORIZED);
+    }
+    // verify family id
+    if (storedToken.familyId !== familyId) {
       throw new ApiError(401, AUTH_MESSAGES.UNAUTHORIZED);
     }
     //8. check expiration
@@ -311,9 +316,10 @@ class AuthService {
       throw new ApiError(401, AUTH_MESSAGES.UNAUTHORIZED);
     }
     //12. generate new tokens
+    //preserve the existing token family
     const {
-      accessToken, refreshToken: newRefreshToken, jti: newJti
-    } = generateTokens(user);
+      accessToken, refreshToken: newRefreshToken, jti: newJti, familyId: newFamilyId
+    } = generateTokens(user, storedToken.familyId);
     //13. hash new refresh token
     const newTokenHash = hashRefreshToken(newRefreshToken);
     //14. calculate expiry
@@ -325,6 +331,7 @@ class AuthService {
       tokenHash: newTokenHash,
       tokenVersion: user.tokenVersion,
       jti: newJti,
+      familyId: newFamilyId,
       expiresAt
     });
     //16. return tokens

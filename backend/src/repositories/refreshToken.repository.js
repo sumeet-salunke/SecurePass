@@ -32,6 +32,16 @@ class RefreshTokenRepository {
     })
   }
 
+  async revokeFamily(familyId) {
+    return await RefreshToken.updateMany({
+      familyId, isRevoked: false
+    }, {
+      $set: {
+        isRevoked: true
+      }
+    })
+  }
+
   /*
   
     async findByToken(token) {

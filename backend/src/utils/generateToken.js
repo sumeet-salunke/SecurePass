@@ -10,25 +10,26 @@ const generateAccessToken = (user) => {
   });
 };
 
-const generateRefreshToken = (user) => {
+const generateRefreshToken = (user, familyId = crypto.randomUUID()) => {
   const jti = crypto.randomUUID();
 
   const token = jwt.sign({
     userId: user._id,
     tokenVersion: user.tokenVersion ?? 0,
     jti,
+    familyId,
   }, process.env.JWT_REFRESH_SECRET, {
     expiresIn: process.env.REFRESH_TOKEN_EXPIRY,
   });
   return {
-    token, jti,
+    token, jti, familyId
   };
 };
 
-const generateTokens = (user) => {
+const generateTokens = (user, familyId = null) => {
   const accessToken = generateAccessToken(user);
-  const { token: refreshToken, jti } = generateRefreshToken(user);
-  return { accessToken, refreshToken, jti };
+  const { token: refreshToken, jti, familyId: generatedFamilyId } = generateRefreshToken(user, familyId ?? undefined);
+  return { accessToken, refreshToken, jti, familyId: generatedFamilyId };
 };
 
 export { generateAccessToken, generateRefreshToken, generateTokens };

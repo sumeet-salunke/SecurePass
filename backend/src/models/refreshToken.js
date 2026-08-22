@@ -19,7 +19,7 @@ const refreshTokenSchema = new mongoose.Schema({
     required: true,
   },
 
-  jti: {
+  jti: {//identifies one specific refresh token
     type: String,
     required: true,
     unique: true,
@@ -27,6 +27,11 @@ const refreshTokenSchema = new mongoose.Schema({
   isRevoked: {
     type: Boolean,
     default: false,
+  },
+  familyId: {// identifies the linage / session
+    type: String,
+    required: true,
+    index: true,
   },
   expiresAt: {
     type: Date,

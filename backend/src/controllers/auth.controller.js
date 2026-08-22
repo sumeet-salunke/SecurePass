@@ -30,8 +30,8 @@ export const login = asyncHandler(async (req, res) => {
 });
 
 export const refreshToken = asyncHandler(async (req, res) => {
-  console.log("COOKIE KEYS:", Object.keys(req.cookies || {}));
-  console.log("HAS REFRESH TOKEN:", Boolean(req.cookies?.refreshToken));
+  // console.log("COOKIE KEYS:", Object.keys(req.cookies || {}));
+  // console.log("HAS REFRESH TOKEN:", Boolean(req.cookies?.refreshToken));
   const result = await authService.refreshToken(req.cookies);
   res.cookie("refreshToken",
     result.refreshToken,

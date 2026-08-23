@@ -356,6 +356,27 @@ class AuthService {
     };
 
   }
+
+
+  async revokeSession(userId, familyId) {
+
+    const revokedSession =
+      await refreshTokenRepository.revokeSession(
+        userId,
+        familyId
+      );
+    if (!revokedSession) {
+      throw new ApiError(
+        404,
+        AUTH_MESSAGES.SESSION_NOT_FOUND
+      );
+    }
+
+    return {
+      message: AUTH_MESSAGES.SESSION_REVOKED,
+      data: null,
+    };
+  }
 }
 
 export default new AuthService();

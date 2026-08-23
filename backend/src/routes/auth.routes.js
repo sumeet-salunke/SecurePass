@@ -2,7 +2,7 @@ import express from "express";
 import rateLimit from "express-rate-limit";
 
 import { registerSchema, verifyOTPSchema, loginSchema } from "../validations/auth.validation.js";
-import { register, verifyOTP, login, resendOTP, refreshToken, getSessions } from "../controllers/auth.controller.js";
+import { register, verifyOTP, login, resendOTP, refreshToken, getSessions, revokeSession } from "../controllers/auth.controller.js";
 import validate from "../middlewares/validate.middleware.js";
 import { authenticate } from "../middlewares/auth.middleware.js";
 
@@ -15,9 +15,11 @@ const sensitiveAuthLimiter = rateLimit({
   message: "Too many authentication attempts. Please try again later."
 });
 
+router.delete("/sessions/:sessionId", authenticate, revokeSession);
 router.post("/register", sensitiveAuthLimiter, validate(registerSchema), register);
 
 router.post("/verify-otp", sensitiveAuthLimiter, validate(verifyOTPSchema), verifyOTP);
+
 
 router.post("/resend-otp", sensitiveAuthLimiter, resendOTP);
 

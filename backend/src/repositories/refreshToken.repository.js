@@ -49,6 +49,25 @@ class RefreshTokenRepository {
       .sort({ createdAt: -1 });
   }
 
+  async revokeSession(userId, familyId) {
+    return await RefreshToken.findOneAndUpdate({
+      userId, familyId, isRevoked: false
+    }, {
+      $set: {
+        isRevoked: true
+      }
+    }, { new: true });
+  }
+  //temp
+  async findSessionForUser(userId, familyId) {
+    return await RefreshToken.findOne({
+      userId,
+      familyId,
+    }).select(
+      "userId familyId isRevoked expiresAt"
+    );
+  }
+
   /*
   
     async findByToken(token) {

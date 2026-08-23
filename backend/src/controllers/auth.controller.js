@@ -46,3 +46,10 @@ export const getSessions = asyncHandler(async (req, res) => {
   const result = await authService.getSessions(req.user.id);
   return res.status(200).json(new ApiResponse(200, result.message, result.data));
 });
+
+export const revokeSession = asyncHandler(async (req, res) => {
+  const userId = req.user.id;
+  const familyId = req.params.sessionId;
+  const result = await authService.revokeSession(userId, familyId);
+  return res.status(200).json(new ApiResponse(200, result.message, result.data));
+});

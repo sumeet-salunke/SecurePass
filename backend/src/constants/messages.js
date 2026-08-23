@@ -53,5 +53,7 @@ export const AUTH_MESSAGES = Object.freeze({
   INVALID_ACCCESS_TOKEN: "Invalid or expired access token.",
   OTP_RESEND_COOLDOWN: "If account exists,ans OTP is sent to your existing email and, ",
   SESSIONS_FETCHED: "Active sessions fetched successfully",
+  SESSION_REVOKED: "Session revoked successfully",
+  SESSION_NOT_FOUND: "Session Not Found",
 
 });

@@ -42,17 +42,16 @@ const userSchema = new mongoose.Schema({
     default: true,
   },
   tokenVersion: {
-    type: Number, default: 0
+    type: Number, default: 0,
   }
 
 }, { timestamps: true });
 
-userSchema.pre("save", async function (next) {
+userSchema.pre("save", async function () {
   if (!this.isModified("password")) {
     return;
   }
   this.password = await bcrypt.hash(this.password, Number(process.env.BCRYPT_SALT_ROUNDS));
-
 });
 
 const User = mongoose.model("User", userSchema);

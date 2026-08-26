@@ -55,5 +55,6 @@ export const AUTH_MESSAGES = Object.freeze({
   SESSIONS_FETCHED: "Active sessions fetched successfully",
   SESSION_REVOKED: "Session revoked successfully",
   SESSION_NOT_FOUND: "Session Not Found",
+  ALL_SESSIONS_REVOKED: "All sessions revoked suucessfully",
 
 });

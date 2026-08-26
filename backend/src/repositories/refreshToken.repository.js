@@ -59,14 +59,18 @@ class RefreshTokenRepository {
     }, { new: true });
   }
   //temp
-  async findSessionForUser(userId, familyId) {
-    return await RefreshToken.findOne({
-      userId,
-      familyId,
-    }).select(
-      "userId familyId isRevoked expiresAt"
-    );
+  // async findSessionForUser(userId, familyId) {
+  //   return await RefreshToken.findOne({
+  //     userId,
+  //     familyId,
+  //   }).select(
+  //     "userId familyId isRevoked expiresAt"
+  //   );
+  // }
+  async revokeAllSessions(userId) {
+    return await RefreshToken.updateMany({ userId, isRevoked: false }, { $set: { isRevoked: true } });
   }
+
 
   /*
   

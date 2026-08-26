@@ -28,7 +28,17 @@ class UserRepository {
   }
   async findAuthUserById(userId) {
     return await User.findById(userId).select("isVerified isActive passwordChangedAt tokenVersion");
+
   }
+
+  async incrementTokenVersion(userId) {
+    return await User.findByIdAndUpdate(userId, {
+      $inc: {
+        tokenVersion: 1
+      }
+    }, { new: true });
+  }
+
 }
 
 

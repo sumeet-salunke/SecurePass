@@ -53,3 +53,8 @@ export const revokeSession = asyncHandler(async (req, res) => {
   const result = await authService.revokeSession(userId, familyId);
   return res.status(200).json(new ApiResponse(200, result.message, result.data));
 });
+
+export const revokeAllSessions = asyncHandler(async (req, res) => {
+  const result = await authService.revokeAllSessions(req.user.id);
+  return res.status(200).json(new ApiResponse(200, result.message, result.data));
+});

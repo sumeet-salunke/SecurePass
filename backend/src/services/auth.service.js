@@ -197,6 +197,7 @@ class AuthService {
     const { email, password } = data;
     //find user
     const user = await userRepository.findByEmail(email);
+
     if (!user) {
       throw new ApiError(400, AUTH_MESSAGES.INVALID_CREDENTIALS);
     }
@@ -227,29 +228,37 @@ class AuthService {
       }
       throw new ApiError(400, AUTH_MESSAGES.INVALID_CREDENTIALS);
     }
-    //reset login attempts
-    await userRepository.updateById(user._id, {
+    //reset login attempts and retrieve updated user
+    const freshUser = await userRepository.updateById(user._id, {
       loginAttempts: 0, lockUntil: null
-    });
+    }) || user;
+
     //generate tokens
-    const { accessToken, refreshToken, jti, familyId } = generateTokens(user);
+    const { accessToken, refreshToken, jti, familyId } = generateTokens(freshUser);
     const tokenHash = hashRefreshToken(refreshToken);
 
     //store refresh token
     const expiry = new Date();
     expiry.setDate(expiry.getDate() + 7);
 
-    await refreshTokenRepository.create({ userId: user._id, tokenHash, tokenVersion: user.tokenVersion ?? 0, jti, familyId, expiresAt: expiry });
+    await refreshTokenRepository.create({
+      userId: freshUser._id,
+      tokenHash,
+      tokenVersion: freshUser.tokenVersion ?? 0,
+      jti,
+      familyId,
+      expiresAt: expiry
+    });
 
     return {
       message: AUTH_MESSAGES.LOGIN_SUCCESS,
       data: {
         accessToken,
         user: {
-          id: user._id,
-          name: user.name,
-          email: user.email,
-          isVerified: user.isVerified
+          id: freshUser._id,
+          name: freshUser.name,
+          email: freshUser.email,
+          isVerified: freshUser.isVerified
         }
       },
       refreshToken,
@@ -376,6 +385,20 @@ class AuthService {
       message: AUTH_MESSAGES.SESSION_REVOKED,
       data: null,
     };
+  }
+
+  async revokeAllSessions(userId) {
+    const revokedSessions = await refreshTokenRepository.revokeAllSessions(userId);
+
+    const updatedUser = await userRepository
+      .incrementTokenVersion(userId);
+    if (!updatedUser) {
+      throw new ApiError(404, AUTH_MESSAGES.USER_NOT_FOUND);
+    }
+    return {
+      message: AUTH_MESSAGES.ALL_SESSIONS_REVOKED,
+      data: null,
+    }
   }
 }
 

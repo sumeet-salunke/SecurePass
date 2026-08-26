@@ -6,8 +6,6 @@ import { AUTH_MESSAGES } from "../constants/messages.js";
 
 export const authenticate = async (req, res, next) => {
   try {
-    console.log("AUTH HEADER  EXISTS", Boolean(req.headers.authorization));
-    console.log("AUTH FORMAT: ", req.headers.authorization?.startsWith("Bearer "));
     //1. get authorization header
     const authHeader = req.headers.authorization;
 

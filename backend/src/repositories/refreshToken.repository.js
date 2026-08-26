@@ -14,13 +14,18 @@ class RefreshTokenRepository {
   }
 
   async revokeById(id) {
-    return await RefreshToken.findByIdAndUpdate({
-      _id: id, isRevoked: false,
-    }, {
-      $set: {
-        isRevoked: true,
-      }
-    }, { new: true });
+    return await RefreshToken.findOneAndUpdate(
+      {
+        _id: id,
+        isRevoked: false,
+      },
+      {
+        $set: {
+          isRevoked: true,
+        },
+      },
+      { returnDocument: "after" }
+    );
   }
   async revokeAllActiveByUserId(userId) {
     return await RefreshToken.updateMany({
@@ -50,25 +55,41 @@ class RefreshTokenRepository {
   }
 
   async revokeSession(userId, familyId) {
-    return await RefreshToken.findOneAndUpdate({
-      userId, familyId, isRevoked: false
-    }, {
-      $set: {
-        isRevoked: true
-      }
-    }, { new: true });
+    return await RefreshToken.findOneAndUpdate(
+      {
+        userId,
+        familyId,
+        isRevoked: false,
+      },
+      {
+        $set: {
+          isRevoked: true,
+        },
+      },
+      { returnDocument: "after" }
+    );
   }
-  //temp
-  // async findSessionForUser(userId, familyId) {
-  //   return await RefreshToken.findOne({
-  //     userId,
-  //     familyId,
-  //   }).select(
-  //     "userId familyId isRevoked expiresAt"
-  //   );
-  // }
+
   async revokeAllSessions(userId) {
     return await RefreshToken.updateMany({ userId, isRevoked: false }, { $set: { isRevoked: true } });
+  }
+
+  async revokeCurrentSession(userId, familyId) {
+    return await RefreshToken.findOneAndUpdate(
+      {
+        userId,
+        familyId,
+        isRevoked: false,
+      },
+      {
+        $set: {
+          isRevoked: true,
+        },
+      },
+      {
+        returnDocument: "after",
+      }
+    );
   }
 
 

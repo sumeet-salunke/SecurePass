@@ -400,6 +400,41 @@ class AuthService {
       data: null,
     }
   }
+
+  async logout(cookies) {
+    //get refresh token
+    const refreshToken = cookies?.refreshToken;
+    //already logged out
+    if (!refreshToken) {
+      return {
+        message: AUTH_MESSAGES.LOGOUT_SUCCESS,
+        data: null,
+      }
+    }
+    let payload;
+    try {
+      payload = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+    } catch (error) {
+      throw new ApiError(401, AUTH_MESSAGES.INVALID_REFRESH_TOKEN
+      );
+    }
+    const { userId, familyId } = payload;
+    if (!userId || !familyId) {
+      throw new ApiError(401, AUTH_MESSAGES.UNAUTHORIZED);
+    }
+
+    const revokedSession = await refreshTokenRepository.revokeCurrentSession(userId, familyId);
+
+    if (!revokedSession) {
+      throw new ApiError(401, AUTH_MESSAGES.UNAUTHORIZED);
+    }
+
+    return {
+      message: AUTH_MESSAGES.LOGOUT_SUCCESS,
+      data: null
+    }
+
+  }
 }
 
 export default new AuthService();

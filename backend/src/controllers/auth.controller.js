@@ -30,8 +30,6 @@ export const login = asyncHandler(async (req, res) => {
 });
 
 export const refreshToken = asyncHandler(async (req, res) => {
-  // console.log("COOKIE KEYS:", Object.keys(req.cookies || {}));
-  // console.log("HAS REFRESH TOKEN:", Boolean(req.cookies?.refreshToken));
   const result = await authService.refreshToken(req.cookies);
   res.cookie("refreshToken",
     result.refreshToken,
@@ -56,5 +54,11 @@ export const revokeSession = asyncHandler(async (req, res) => {
 
 export const revokeAllSessions = asyncHandler(async (req, res) => {
   const result = await authService.revokeAllSessions(req.user.id);
+  return res.status(200).json(new ApiResponse(200, result.message, result.data));
+});
+
+export const logout = asyncHandler(async (req, res) => {
+  const result = await authService.logout(req.cookies);
+  res.clearCookie("refreshToken", clearCookieOptions);
   return res.status(200).json(new ApiResponse(200, result.message, result.data));
 });

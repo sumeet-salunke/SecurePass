@@ -62,3 +62,9 @@ export const logout = asyncHandler(async (req, res) => {
   res.clearCookie("refreshToken", clearCookieOptions);
   return res.status(200).json(new ApiResponse(200, result.message, result.data));
 });
+
+export const changePassword = asyncHandler(async (req, res) => {
+  const result = await authService.changePassword(req.user.id, req.body);
+  return res.status(200).json(new ApiResponse(200, result.message, result.data));
+
+});

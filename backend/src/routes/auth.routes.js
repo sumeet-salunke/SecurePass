@@ -2,7 +2,7 @@ import express from "express";
 import rateLimit from "express-rate-limit";
 
 import { registerSchema, verifyOTPSchema, loginSchema } from "../validations/auth.validation.js";
-import { register, verifyOTP, login, resendOTP, refreshToken, getSessions, revokeSession, revokeAllSessions, logout } from "../controllers/auth.controller.js";
+import { register, verifyOTP, login, resendOTP, refreshToken, getSessions, revokeSession, revokeAllSessions, logout, changePassword } from "../controllers/auth.controller.js";
 import validate from "../middlewares/validate.middleware.js";
 import { authenticate } from "../middlewares/auth.middleware.js";
 
@@ -25,6 +25,8 @@ router.post("/verify-otp", sensitiveAuthLimiter, validate(verifyOTPSchema), veri
 router.post("/resend-otp", sensitiveAuthLimiter, resendOTP);
 
 router.post("/login", sensitiveAuthLimiter, validate(loginSchema), login);
+
+router.patch("/change-password", authenticate, changePassword);
 
 router.post("/refresh", refreshToken);
 

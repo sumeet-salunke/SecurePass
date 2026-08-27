@@ -56,5 +56,10 @@ export const AUTH_MESSAGES = Object.freeze({
   SESSION_REVOKED: "Session revoked successfully",
   SESSION_NOT_FOUND: "Session Not Found",
   ALL_SESSIONS_REVOKED: "All sessions revoked suucessfully",
+  CURRENT_PASSWORD_REQUIRED: "Current password required.",
+  NEW_PASSWORD_REQUIRED: "New password required.",
+  PASSWORD_MUST_DIFFERENT: "Password must be different.",
+  INTERNAL_SERVER_ERROR: "Internal server error.",
+  PASSWORD_CHANGED: "Passsword changed successfully",
 
 });

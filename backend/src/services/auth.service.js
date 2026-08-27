@@ -435,6 +435,55 @@ class AuthService {
     }
 
   }
+
+  async changePassword(userId, data) {
+    //1. authenticate user
+    if (!userId) {
+      throw new ApiError(401, AUTH_MESSAGES.UNAUTHORIZED);
+    }
+    //2. validate request
+    const { currentPassword, newPassword } = data;
+    if (!currentPassword) {
+      throw new ApiError(400, AUTH_MESSAGES.CURRENT_PASSWORD_REQUIRED);
+    }
+    if (!newPassword) {
+      throw new ApiError(400, AUTH_MESSAGES.NEW_PASSWORD_REQUIRED);
+    }
+    //3. password must be different
+    if (currentPassword === newPassword) {
+      throw new ApiError(400, AUTH_MESSAGES.PASSWORD_MUST_DIFFERENT);
+    }
+    //4. fetch user password hash
+    const user = await userRepository.findByIdWithPassword(userId);
+    if (!user) {
+      throw new ApiError(404, AUTH_MESSAGES.USER_NOT_FOUND);
+    }
+    //5. verify current password
+    const isPasswordVerified = await bcrypt.compare(currentPassword, user.password);
+    if (!isPasswordVerified) {
+      throw new ApiError(401, AUTH_MESSAGES.INVALID_CREDENTIALS);
+    }
+    //6.hash new password
+    const hashedNewPassword = await bcrypt.hash(newPassword, Number(process.env.BCRYPT_SALT_ROUNDS));
+    //7. save new password
+    const updatedUser = await userRepository.updatePassword(userId, hashedNewPassword);
+    if (!updatedUser) {
+      throw new ApiError(404, AUTH_MESSAGES.USER_NOT_FOUND);
+
+    }
+    //8. revoke all refresh sessions
+    await refreshTokenRepository.revokeAllSessions(userId);
+    //9. invalidate all existing access tokens
+    const versionUpdated = await userRepository.incrementTokenVersion(userId);
+    if (!versionUpdated) {
+      throw new ApiError(500, AUTH_MESSAGES.INTERNAL_SERVER_ERROR);
+    }
+
+    return {
+      message: AUTH_MESSAGES.PASSWORD_RESET_SUCCESS,
+      data: null
+    };
+  }
 }
 
 export default new AuthService();

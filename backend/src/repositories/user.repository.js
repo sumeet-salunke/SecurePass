@@ -12,7 +12,7 @@ class UserRepository {
   }
 
   async findById(userId) {
-    return await User.findById(userId);
+    return await User.findById(userId).select("password");
   }
 
   async deleteById(userId) {
@@ -37,6 +37,20 @@ class UserRepository {
         tokenVersion: 1
       }
     }, { new: true });
+  }
+
+  async updatePassword(userId, newPassword) {
+    return User.findOneAndUpdate({
+      _id: userId, isActive: true
+    }, {
+      $set: {
+        password: newPassword
+      }
+    }, { returnDocument: "after" });
+  }
+
+  async findByIdWithPassword(userId) {
+    return await User.findById(userId).select("+password");
   }
 
 }

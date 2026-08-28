@@ -61,5 +61,6 @@ export const AUTH_MESSAGES = Object.freeze({
   PASSWORD_MUST_DIFFERENT: "Password must be different.",
   INTERNAL_SERVER_ERROR: "Internal server error.",
   PASSWORD_CHANGED: "Passsword changed successfully",
+  GENERIC_RESPONSE: "If email exists, an OTP has been sent. "
 
 });

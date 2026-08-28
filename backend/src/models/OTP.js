@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import { OTP_PURPOSE } from "../constants/otpPurpose.js";
 
-const optSchema = new mongoose.Schema({
+const otpSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
@@ -37,10 +37,10 @@ const optSchema = new mongoose.Schema({
   },
 }, { timestamps: true });
 
-optSchema.index({
+otpSchema.index({
   userId: 1, purpose: 1,
   isUsed: 1
 });
 
-const OTP = mongoose.model("OTP", optSchema);
+const OTP = mongoose.model("OTP", otpSchema);
 export default OTP;

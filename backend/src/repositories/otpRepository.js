@@ -43,6 +43,16 @@ class OTPRepository {
     }, { new: true })
   }
 
+  async consumeActiveOTPs(userId, purpose) {
+    return await OTP.updateMany({
+      userId, purpose, isUsed: false,
+    }, {
+      $set: {
+        isUsed: true
+      }
+    })
+  }
+
 
 }
 export default new OTPRepository();

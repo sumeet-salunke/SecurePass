@@ -8,13 +8,13 @@ import calculateOTPExpiry from "../utils/calculateOTPExpity.js";
 import { sendMail } from "../config/mail.js";
 import otpTemplate from "../templates/otp.template.js";
 import logger from "../utils/logger.js";
-
+import { hashOTP } from "../helpers/hashOTP.js";
 import { OTP_PURPOSE } from "../constants/otpPurpose.js";
 import { AUTH_MESSAGES } from "../constants/messages.js";
 import { generateAccessToken, generateRefreshToken, generateTokens } from "../utils/generateToken.js";
 
 import userRepository from "../repositories/user.repository.js";
-import otpReposiory from "../repositories/otpReposiory.js";
+import otpRepository from "../repositories/otpRepository.js";
 import refreshTokenRepository from "../repositories/refreshToken.repository.js";
 import { OTP_CONFIG } from "../constants/constants.js";
 import { hashRefreshToken } from "../utils/hashRefreshToken.js";
@@ -32,11 +32,11 @@ class AuthService {
     if (existingUser && !existingUser.isVerified) {
       const otp = generateOTP();
       const otpHash = await bcrypt.hash(otp, Number(process.env.BCRYPT_SALT_ROUNDS));
-      await otpReposiory.deleteActiveOTP(existingUser._id,
+      await otpRepository.deleteActiveOTP(existingUser._id,
         OTP_PURPOSE.VERIFY_ACCOUNT
       );
 
-      await otpReposiory.create({
+      await otpRepository.create({
         userId: existingUser._id,
         email,
         otpHash,
@@ -60,7 +60,7 @@ class AuthService {
       createdUser = await userRepository.create({ name, email, password });
       const otp = generateOTP();
       const otpHash = await bcrypt.hash(otp, Number(process.env.BCRYPT_SALT_ROUNDS));
-      await otpReposiory.create({
+      await otpRepository.create({
         userId: createdUser._id,
         email, otpHash,
         purpose: OTP_PURPOSE.VERIFY_ACCOUNT,
@@ -103,7 +103,7 @@ class AuthService {
       throw new ApiError(409, AUTH_MESSAGES.EMAIL_ALREADY_VERIFIED);
     }
     //3. find active otp
-    const otpRecord = await otpReposiory.findActiveOTP(user._id, OTP_PURPOSE.VERIFY_ACCOUNT);
+    const otpRecord = await otpRepository.findActiveOTP(user._id, OTP_PURPOSE.VERIFY_ACCOUNT);
     if (!otpRecord) {
       throw new ApiError(400, AUTH_MESSAGES.INVALID_OR_EXPIRED_OTP);
     }
@@ -113,19 +113,19 @@ class AuthService {
     }
     //5. check maximum attempts
     if (otpRecord.attempts >= OTP_CONFIG.MAX_OTP_ATTEMPTS) {
-      await otpReposiory.consumeOTP(otpRecord._id);
+      await otpRepository.consumeOTP(otpRecord._id);
       throw new ApiError(400, AUTH_MESSAGES.INVALID_OR_EXPIRED_OTP);
     }
     //6. compare  submitted OTP with stored hash
     const isValid = await bcrypt.compare(otp, otpRecord.otpHash);
     //7. wrong OTP
     if (!isValid) {
-      await otpReposiory.incrementAttempts(otpRecord._id);
+      await otpRepository.incrementAttempts(otpRecord._id);
       throw new ApiError(400, AUTH_MESSAGES.INVALID_OR_EXPIRED_OTP
       );
     }
     //8. mark otp used or automatically consume OTP
-    const consumedOTP = await otpReposiory.consumeOTP(otpRecord._id);
+    const consumedOTP = await otpRepository.consumeOTP(otpRecord._id);
     //another request may have consumed it
     if (!consumedOTP) {
       throw new ApiError(400, AUTH_MESSAGES.INVALID_OR_EXPIRED_OTP);
@@ -155,7 +155,7 @@ class AuthService {
       throw new ApiError(409, AUTH_MESSAGES.EMAIL_ALREADY_VERIFIED);
     }
     //3. find active otp
-    const otpRecord = await otpReposiory.findActiveOTP(user._id, OTP_PURPOSE.VERIFY_ACCOUNT);
+    const otpRecord = await otpRepository.findActiveOTP(user._id, OTP_PURPOSE.VERIFY_ACCOUNT);
     //4. active otp exists
     if (otpRecord) {
       //5. check cooldown
@@ -166,14 +166,14 @@ class AuthService {
         throw new ApiError(429, `${AUTH_MESSAGES.OTP_RESEND_COOLDOWN} ${remainingSeconds} seconds`);
       }
       //7. cooldown expired - invalidate old OTP
-      await otpReposiory.consumeOTP(otpRecord._id);
+      await otpRepository.consumeOTP(otpRecord._id);
     }
     //8.generate new OPT
     const otp = generateOTP();
     //9. hash otp
     const otpHash = await bcrypt.hash(otp, Number(process.env.BCRYPT_SALT_ROUNDS));
     //10. save new otp
-    await otpReposiory.create({
+    await otpRepository.create({
       userId: user._id,
       email,
       otpHash,
@@ -483,6 +483,109 @@ class AuthService {
       message: AUTH_MESSAGES.PASSWORD_RESET_SUCCESS,
       data: null
     };
+  }
+
+  async forgotPassword(data) {
+    const { email } = data;
+    //1. validate email
+    if (!email) {
+      throw new ApiError(400, AUTH_MESSAGES.INVALID_CREDENTIALS);
+    }
+    //2. find user
+    const user = await userRepository.findByEmail(email);
+    //3. generic repsone if user doesn't exist
+    if (!user) {
+      return {
+        message: AUTH_MESSAGES.GENERIC_RESPONSE,
+        data: null,
+      }
+    }
+
+    //4. invalidate existing reset OTPs
+    await otpRepository.consumeActiveOTPs(user._id, OTP_PURPOSE.RESET_PASSWORD);
+
+    //5. generate OTP
+    const otp = generateOTP();
+
+    //6. hash otp
+    const hashedOTP = await hashOTP(otp);
+
+    //7. save otp with RESET_PASSWORD purpose
+    await otpRepository.create({
+      userId: user._id,
+      email: user.email,
+      otpHash: hashedOTP,
+      purpose: OTP_PURPOSE.RESET_PASSWORD,
+      expiresAt: new Date(Date.now() + OTP_CONFIG.EXPIRY_MINUTES * 60 * 1000),
+    });
+
+    //8. send email
+    await sendMail({
+      to: user.email,
+      subject: "Password Reset OTP",
+      html: otpTemplate(user.name, otp)
+    });
+
+    //9. return generic response
+    return {
+      message: AUTH_MESSAGES.GENERIC_RESPONSE,
+      data: null
+    };
+  }
+
+  async resetPassword(data) {
+    const { email, otp, newPassword } = data;
+    //1. vaiidate email, otp, newPassword
+    if (!email || !otp || !newPassword) {
+      throw new ApiError(400, AUTH_MESSAGES.INVALID_CREDENTIALS);
+    }
+    //2. Find user
+    const user = await userRepository.findByEmail(email);
+
+    if (!user) {
+      throw new ApiError(401, AUTH_MESSAGES.UNAUTHORIZED);
+    }
+    //3. find active RESET_PASSWORD OTP
+    const otpRecord = await otpRepository.findActiveOTP(user._id, OTP_PURPOSE.RESET_PASSWORD);
+
+    if (!otpRecord) {
+      throw new ApiError(400, AUTH_MESSAGES.INVALID_OR_EXPIRED_OTP);
+
+    }
+    //4. check expiry
+    if (otpRecord.expiresAt <= new Date()) {
+      throw new ApiError(400, AUTH_MESSAGES.INVALID_OR_EXPIRED_OTP);
+    }
+    //5. check attempts
+    if (otpRecord.attempts >= OTP_CONFIG.MAX_OTP_ATTEMPTS) {
+      await otpRepository.consumeOTP(otpRecord._id);
+      throw new ApiError(400, AUTH_MESSAGES.INVALID_OR_EXPIRED_OTP);
+    }
+    //6. compare OTP
+    const isOTPValid = await bcrypt.compare(otp, otpRecord.otpHash);
+
+    if (!isOTPValid) {
+      await otpRepository.incrementAttempts(otpRecord._id);
+      throw new ApiError(400, AUTH_MESSAGES.INVALID_OR_EXPIRED_OTP);
+    }
+    //7. Hash new password
+    const hashedNewPassword = await bcrypt.hash(newPassword, Number(process.env.BCRYPT_SALT_ROUNDS));
+    //8. Update password
+    const updatedUser = await userRepository.updatePassword(user._id, hashedNewPassword);
+    if (!updatedUser) {
+      throw new ApiError(500, AUTH_MESSAGES.INTERNAL_SERVER_ERROR);
+    }
+    //9. consume OTP
+    await otpRepository.consumeOTP(otpRecord._id);
+    //10. revoke all refresh sessions
+    await refreshTokenRepository.revokeAllSessions(user._id);
+    //invalidate existing access tokens
+    await userRepository.incrementTokenVersion(user._id);
+    return {
+      message: AUTH_MESSAGES.PASSWORD_RESET_SUCCESS,
+      data: null
+    }
+
   }
 }
 

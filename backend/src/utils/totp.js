@@ -5,10 +5,10 @@ export const generateMFASecret = () => {
 };
 
 //create otpauth:// uri that the authenticator app understands
-export const generateMFAURI = () => {
+export const generateMFAURI = (secret, email) => {
   return generateURI({
     issuer: "SecurePass",
-    label: ElementInternals,
+    label: email,
     secret,
   });
 };

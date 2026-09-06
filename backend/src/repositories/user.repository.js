@@ -15,6 +15,10 @@ class UserRepository {
     return await User.findById(userId).select("password");
   }
 
+  async findByIdWithSecret(userId) {
+    return await User.findById(userId).select(" mfaSecret");
+  }
+
   async deleteById(userId) {
     return await User.findByIdAndDelete(userId);
   }
@@ -51,6 +55,28 @@ class UserRepository {
 
   async findByIdWithPassword(userId) {
     return await User.findById(userId).select("+password");
+  }
+
+  async updateMFASecret(userId, secret) {
+    return await User.findByIdAndUpdate(
+      userId, {
+      $set: {
+        mfaSecret: secret,
+      }
+    }, {
+      returnDocument: "after"
+    }
+    );
+  }
+
+  async enableMFA(userId) {
+    return await User.findByIdAndUpdate(userId,
+      {
+        $set: {
+          mfaEnabled: true,
+        }
+      }
+      , { returnDocument: "after" });
   }
 
 }

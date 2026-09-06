@@ -90,6 +90,18 @@ export const AUTH_MESSAGES = Object.freeze({
 
   INVALID_MFA_CODE: "Invalid MFA code.",
 
-  MFA_ENABLED: "MFA has been successfully enabled. "
+  MFA_ENABLED: "MFA has been successfully enabled. ",
+
+  MFA_REQUIRED: "MFA required.",
+
+  INVALID_MFA_CHALLENGE: "Invalid MFA challenge.",
+
+  MFA_DISABLED: "MFA has been disabled successfully. ",
+
+  NO_RECOVERY_CODES: "No recovery codes",
+
+  INVALID_RECOVERY_CODE: "Invalid recovery code. ",
+
+  RECOVERY_CODES_REGENERATED: "Recovery codes regenrated successfully."
 
 });

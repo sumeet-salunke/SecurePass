@@ -12,11 +12,11 @@ class UserRepository {
   }
 
   async findById(userId) {
-    return await User.findById(userId).select("password");
+    return await User.findById(userId);
   }
 
   async findByIdWithSecret(userId) {
-    return await User.findById(userId).select(" mfaSecret");
+    return await User.findById(userId).select("+mfaSecret");
   }
 
   async deleteById(userId) {
@@ -69,16 +69,56 @@ class UserRepository {
     );
   }
 
-  async enableMFA(userId) {
+  async enableMFA(userId, mfaSecret, recoveryCodes) {
     return await User.findByIdAndUpdate(userId,
       {
         $set: {
           mfaEnabled: true,
+          mfaSecret,
+          recoveryCodes
         }
       }
       , { returnDocument: "after" });
   }
 
+  async findByIdWithPasswordAndMFASecret(userId) {
+    return await User.findById(userId).select("+password +mfaSecret");
+  }
+
+  async disableMFA(userId) {
+    return await User.findByIdAndUpdate(userId, {
+      $set: {
+        mfaEnabled: false,
+      }
+    }, {
+      returnDocument: "after",
+    })
+  }
+
+  async findByIdWithRecoveryCodes(userId) {
+    return await User.findById(userId).select("+recoveryCodes");
+  }
+  async consumeRecoveryCode(userId, recoveryCodeHash) {
+    return await User.findByIdAndUpdate(
+      userId,
+      {
+        $pull: {
+          recoveryCodes: recoveryCodeHash
+        }
+      }, {
+      returnDocument: "after"
+    }
+    );
+  }
+  async replaceRecoveryCodes(userId, recoveryCodes) {
+    return await User.findByIdAndUpdate(userId, {
+      $set: {
+        recoveryCodes
+      }
+    }, {
+      returnDocument: "after"
+    });
+  }
 }
 
 

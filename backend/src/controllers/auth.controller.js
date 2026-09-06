@@ -88,3 +88,26 @@ export const verifyMFACode = asyncHandler(async (req, res) => {
   const result = await authService.verifyMFASetup(req.user.id, req.body.code);
   return res.status(200).json(new ApiResponse(200, result.message, result.data))
 });
+
+export const verifyMFALogin = asyncHandler(async (req, res) => {
+  const result = await authService.verifyMFALogin(req.body);
+  //store the refresh token in the same secure cookie used by normal login
+  res.cookie("refreshToken", result.refreshToken, cookieOptions);
+  return res.status(200).json(new ApiResponse(200, result.message, result.data));
+});
+
+export const disableMFA = asyncHandler(async (req, res) => {
+  const result = await authService.disableMFA(req.user.id, req.body);
+  return res.status(200).json(new ApiResponse(200, result.message, result.data));
+});
+
+export const verifyRecoveryCodeLogin = asyncHandler(async (req, res) => {
+  const result = await authService.verifyRecoveryCodeLogin(req.body);
+  res.cookie("refreshToken", result.refreshToken, cookieOptions);
+  return res.status(200).json(new ApiResponse(200, result.message, result.data));
+});
+
+export const regenerateRecoveryCodes = asyncHandler(async (req, res) => {
+  const result = await authService.regenerateRecoveryCodes(req.user.id, req.body);
+  return res.status(200).json(new ApiResponse(200, result.message, result.data));
+});

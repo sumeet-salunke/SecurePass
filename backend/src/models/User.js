@@ -50,7 +50,12 @@ const userSchema = new mongoose.Schema({
   mfaSecret: {
     type: String,
     select: false,
-  }
+  },
+  recoveryCodes: {
+    type: [String],
+    select: false,
+    default: [],
+  },
 
 }, { timestamps: true });
 

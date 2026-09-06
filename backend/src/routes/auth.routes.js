@@ -2,7 +2,7 @@ import express from "express";
 import rateLimit from "express-rate-limit";
 
 import { registerSchema, verifyOTPSchema, loginSchema } from "../validations/auth.validation.js";
-import { register, verifyOTP, login, resendOTP, refreshToken, getSessions, revokeSession, revokeAllSessions, logout, changePassword, forgotPassword, resetPassword, setupMFA, verifyMFACode } from "../controllers/auth.controller.js";
+import { register, verifyOTP, login, resendOTP, refreshToken, getSessions, revokeSession, revokeAllSessions, logout, changePassword, forgotPassword, resetPassword, setupMFA, verifyMFACode, verifyMFALogin, disableMFA, verifyRecoveryCodeLogin, regenerateRecoveryCodes } from "../controllers/auth.controller.js";
 import validate from "../middlewares/validate.middleware.js";
 import { authenticate } from "../middlewares/auth.middleware.js";
 
@@ -14,6 +14,7 @@ const sensitiveAuthLimiter = rateLimit({
   legacyHeaders: false,
   message: "Too many authentication attempts. Please try again later."
 });
+router.post("/mfa/verify-login", sensitiveAuthLimiter, verifyMFALogin);
 
 router.delete("/sessions", authenticate, revokeAllSessions);
 router.delete("/sessions/:sessionId", authenticate, revokeSession);
@@ -23,6 +24,8 @@ router.post("/register", sensitiveAuthLimiter, validate(registerSchema), registe
 router.post("/verify-otp", sensitiveAuthLimiter, validate(verifyOTPSchema), verifyOTP);
 
 router.post("/resend-otp", sensitiveAuthLimiter, resendOTP);
+
+router.post("/mfa/verify-recovery", sensitiveAuthLimiter, verifyRecoveryCodeLogin);
 
 router.post("/login", sensitiveAuthLimiter, validate(loginSchema), login);
 
@@ -34,11 +37,16 @@ router.post("/reset-password", resetPassword);
 
 router.post("/refresh", refreshToken);
 
+
 router.post("/logout", logout);
+
+router.post("/mfa/disable", authenticate, sensitiveAuthLimiter, disableMFA);
+
+router.post("/mfa/regenerate-recovery-codes", authenticate, sensitiveAuthLimiter, regenerateRecoveryCodes);
 
 router.post("/mfa/setup", authenticate, setupMFA);
 
-router.post("/mfa/verify-setup", authenticate, verifyMFACode);
+router.post("/mfa/verify-setup", authenticate, sensitiveAuthLimiter, verifyMFACode);
 
 router.get("/sessions", authenticate, getSessions);
 

@@ -23,6 +23,8 @@
     "mongoose": "^9.9.1",
     "morgan": "^1.11.0",
     "nodemailer": "^9.0.4",
+    "otplib": "^13.5.0",
+    "qrcode": "^1.5.4",
     "winston": "^3.19.0",
     "zod": "^4.4.3"
   }

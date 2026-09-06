@@ -43,6 +43,13 @@ const userSchema = new mongoose.Schema({
   },
   tokenVersion: {
     type: Number, default: 0,
+  },
+  mfaEnabled: {
+    type: Boolean, default: false,
+  },
+  mfaSecret: {
+    type: String,
+    select: false,
   }
 
 }, { timestamps: true });

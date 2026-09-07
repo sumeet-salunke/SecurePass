@@ -111,3 +111,13 @@ export const regenerateRecoveryCodes = asyncHandler(async (req, res) => {
   const result = await authService.regenerateRecoveryCodes(req.user.id, req.body);
   return res.status(200).json(new ApiResponse(200, result.message, result.data));
 });
+
+export const changeEmail = asyncHandler(async (req, res) => {
+  const result = await authService.changeEmail(req.user.id, req.body);
+  return res.status(200).json(new ApiResponse(200, result.message, result.data));
+});
+
+export const verifyEmailChange = asyncHandler(async (req, res) => {
+  const result = await authService.verifyEmailChange(req.user.id, req.body);
+  return res.status(200).json(new ApiResponse(200, result.message, result.data));
+});

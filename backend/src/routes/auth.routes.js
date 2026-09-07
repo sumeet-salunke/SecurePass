@@ -1,8 +1,8 @@
 import express from "express";
 import rateLimit from "express-rate-limit";
 
-import { registerSchema, verifyOTPSchema, loginSchema } from "../validations/auth.validation.js";
-import { register, verifyOTP, login, resendOTP, refreshToken, getSessions, revokeSession, revokeAllSessions, logout, changePassword, forgotPassword, resetPassword, setupMFA, verifyMFACode, verifyMFALogin, disableMFA, verifyRecoveryCodeLogin, regenerateRecoveryCodes } from "../controllers/auth.controller.js";
+import { registerSchema, verifyOTPSchema, loginSchema, changeEmailSchema, verifyEmailChangeSchema } from "../validations/auth.validation.js";
+import { register, verifyOTP, login, resendOTP, refreshToken, getSessions, revokeSession, revokeAllSessions, logout, changePassword, forgotPassword, resetPassword, setupMFA, verifyMFACode, verifyMFALogin, disableMFA, verifyRecoveryCodeLogin, regenerateRecoveryCodes, changeEmail, verifyEmailChange } from "../controllers/auth.controller.js";
 import validate from "../middlewares/validate.middleware.js";
 import { authenticate } from "../middlewares/auth.middleware.js";
 
@@ -30,6 +30,11 @@ router.post("/mfa/verify-recovery", sensitiveAuthLimiter, verifyRecoveryCodeLogi
 router.post("/login", sensitiveAuthLimiter, validate(loginSchema), login);
 
 router.patch("/change-password", authenticate, changePassword);
+
+router.post("/change-email", authenticate, validate(changeEmailSchema), changeEmail);
+
+router.post("/verify-change-email", authenticate, validate(verifyEmailChangeSchema), verifyEmailChange);
+
 
 router.post("/forgot-password", sensitiveAuthLimiter, forgotPassword);
 

@@ -48,7 +48,8 @@ class UserRepository {
       _id: userId, isActive: true
     }, {
       $set: {
-        password: newPassword
+        password: newPassword,
+        passwordChangedAt: new Date(),
       }
     }, { returnDocument: "after" });
   }
@@ -119,7 +120,39 @@ class UserRepository {
       returnDocument: "after"
     });
   }
-}
 
+  async findByPendingEmail(pendingEmail) {
+    return await User.findOne({ pendingEmail });
+  }
+
+  async setPendingEmail(userId, pendingEmail) {
+    return await User.findByIdAndUpdate(
+      userId, {
+      $set: {
+        pendingEmail: pendingEmail,
+      }
+    }
+      , {
+        returnDocument: "after"
+      });
+  }
+
+  async completeEmailChange(userId, newEmail) {
+    return await User.findByIdAndUpdate(
+      userId,
+      {
+        $set: {
+          email: newEmail,
+          pendingEmail: null
+        },
+        $inc: {
+          tokenVersion: 1
+        }
+      }
+      , {
+        returnDocument: "after"
+      });
+  }
+}
 
 export default new UserRepository();

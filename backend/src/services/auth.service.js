@@ -35,6 +35,14 @@ class AuthService {
     }
     //existing email nut not verified
     if (existingUser && !existingUser.isVerified) {
+      const activeOTP = await otpRepository.findActiveOTP(existingUser._id, OTP_PURPOSE.VERIFY_ACCOUNT);
+      if (activeOTP) {
+        const cooldownEndsAt = new Date(activeOTP.createdAt.getTime() + OTP_CONFIG.RESEND_COOLDOWN_SECONDS * 1000);
+        if (cooldownEndsAt > new Date()) {
+          const remainingSeconds = Math.ceil((cooldownEndsAt.getTime() - Date.now()) / 1000);
+          throw new ApiError(429, `${AUTH_MESSAGES.OTP_RESEND_COOLDOWN} ${remainingSeconds} seconds`);
+        }
+      }
       const otp = generateOTP();
       const otpHash = await bcrypt.hash(otp, Number(process.env.BCRYPT_SALT_ROUNDS));
       await otpRepository.deleteActiveOTP(existingUser._id,
@@ -295,7 +303,11 @@ class AuthService {
     } catch (error) {
       throw new ApiError(401, AUTH_MESSAGES.INVALID_MFA_CHALLENGE);
     }
-    if (payload.type !== "mfa_challenge") {
+    if (payload.type !== "mfa_challenge" || !payload.jti) {
+      throw new ApiError(401, AUTH_MESSAGES.INVALID_MFA_CHALLENGE);
+    }
+    const isChallengeUsed = await refreshTokenRepository.findByJti(payload.jti);
+    if (isChallengeUsed) {
       throw new ApiError(401, AUTH_MESSAGES.INVALID_MFA_CHALLENGE);
     }
     const user = await userRepository.findByIdWithSecret(payload.userId);
@@ -316,7 +328,7 @@ class AuthService {
     }
     //MFA is now completely verified
     //only at this point should normal authentication tokens be issued
-    const { accessToken, refreshToken, jti, familyId } = generateTokens(user);
+    const { accessToken, refreshToken, jti, familyId } = generateTokens(user, null, payload.jti);
 
     const tokenHash = hashRefreshToken(refreshToken);
     const expiry = new Date();
@@ -356,6 +368,9 @@ class AuthService {
     try {
       payload = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
     } catch (error) {
+      throw new ApiError(401, AUTH_MESSAGES.UNAUTHORIZED);
+    }
+    if (payload.type !== "refresh") {
       throw new ApiError(401, AUTH_MESSAGES.UNAUTHORIZED);
     }
     //3. extract JWT payload
@@ -497,6 +512,9 @@ class AuthService {
       throw new ApiError(401, AUTH_MESSAGES.INVALID_REFRESH_TOKEN
       );
     }
+    if (payload.type !== "refresh") {
+      throw new ApiError(401, AUTH_MESSAGES.UNAUTHORIZED);
+    }
     const { userId, familyId } = payload;
     if (!userId || !familyId) {
       throw new ApiError(401, AUTH_MESSAGES.UNAUTHORIZED);
@@ -580,7 +598,17 @@ class AuthService {
       }
     }
 
-    //4. invalidate existing reset OTPs
+    //4. check cooldown for existing active reset OTP
+    const activeOTP = await otpRepository.findActiveOTP(user._id, OTP_PURPOSE.RESET_PASSWORD);
+    if (activeOTP) {
+      const cooldownEndsAt = new Date(activeOTP.createdAt.getTime() + OTP_CONFIG.RESEND_COOLDOWN_SECONDS * 1000);
+      if (cooldownEndsAt > new Date()) {
+        const remainingSeconds = Math.ceil((cooldownEndsAt.getTime() - Date.now()) / 1000);
+        throw new ApiError(429, `${AUTH_MESSAGES.OTP_RESEND_COOLDOWN} ${remainingSeconds} seconds`);
+      }
+    }
+
+    //5. invalidate existing reset OTPs
     await otpRepository.consumeActiveOTPs(user._id, OTP_PURPOSE.RESET_PASSWORD);
 
     //5. generate OTP
@@ -696,7 +724,7 @@ class AuthService {
       },
     };
   }
-  //or verifyMFACode
+
   async verifyMFASetup(userId, code) {
     if (!userId) {
       throw new ApiError(401, AUTH_MESSAGES.UNAUTHORIZED);
@@ -735,6 +763,10 @@ class AuthService {
 
     //MFA is enabled after successful verification
     await userRepository.enableMFA(userId, user.mfaSecret, hashedRecoveryCodes);
+    //invalidate all existing refresh-token sessions
+    await refreshTokenRepository.revokeAllSessions(userId);
+    //invalidate all existing access tokens
+    await userRepository.incrementTokenVersion(userId);
     return {
       message: AUTH_MESSAGES.MFA_ENABLED,
       data: {
@@ -791,7 +823,11 @@ class AuthService {
       throw new ApiError(401, AUTH_MESSAGES.INVALID_MFA_CHALLENGE);
     }
     //ensure if the token was specifically created for MFA login
-    if (payload.type !== "mfa_challenge") {
+    if (payload.type !== "mfa_challenge" || !payload.jti) {
+      throw new ApiError(401, AUTH_MESSAGES.INVALID_MFA_CHALLENGE);
+    }
+    const isChallengeUsed = await refreshTokenRepository.findByJti(payload.jti);
+    if (isChallengeUsed) {
       throw new ApiError(401, AUTH_MESSAGES.INVALID_MFA_CHALLENGE);
     }
     const user = await userRepository.findByIdWithRecoveryCodes(payload.userId);
@@ -827,7 +863,7 @@ class AuthService {
 
     //recovery code successfully completed MFA
     //Issue the same authentication tokens as normal MFA login.
-    const { accessToken, refreshToken, jti, familyId } = generateTokens(user);
+    const { accessToken, refreshToken, jti, familyId } = generateTokens(user, null, payload.jti);
     const tokenHash = hashRefreshToken(refreshToken);
     const expiry = new Date();
     expiry.setDate(expiry.getDate() + 7);
@@ -896,6 +932,130 @@ class AuthService {
         recoveryCodes
       }
     };
+  }
+
+  async changeEmail(userId, data) {
+    //validate userId
+    if (!userId) {
+      throw new ApiError(401, AUTH_MESSAGES.UNAUTHORIZED);
+    }
+    //extract current password and new email
+    const { currentPassword, newEmail } = data;
+    //both are required.
+    if (!currentPassword || !newEmail) {
+      throw new ApiError(400, AUTH_MESSAGES.INVALID_CREDENTIALS);
+    }
+    //fetch user
+    const user = await userRepository.findByIdWithPassword(userId);
+    if (!user) {
+      throw new ApiError(404, AUTH_MESSAGES.USER_NOT_FOUND);
+    }
+    // verify current password
+    const isPasswordMatched = await bcrypt.compare(currentPassword, user.password);
+    if (!isPasswordMatched) {
+      throw new ApiError(401, AUTH_MESSAGES.UNAUTHORIZED);
+    }
+    //check new Email isn't current email
+    if (user.email === newEmail) {
+      throw new ApiError(400, AUTH_MESSAGES.INVALID_CREDENTIALS);
+    }
+
+    const newEmailUser = await userRepository.findByEmail(newEmail);
+    //if a user has same email
+    if (newEmailUser) {
+      throw new ApiError(400, AUTH_MESSAGES.INVALID_CREDENTIALS);
+    }
+    const pendingEmailUser = await userRepository.findByPendingEmail(newEmail);
+
+    if (pendingEmailUser && pendingEmailUser._id.toString() !== userId.toString()) {
+      throw new ApiError(400, AUTH_MESSAGES.INVALID_CREDENTIALS);
+    }
+    //check active CHANGE_EMAIL OTP cooldown
+    const activeOTP = await otpRepository.findActiveOTP(userId, OTP_PURPOSE.CHANGE_EMAIL);
+    if (activeOTP) {
+      const cooldownEndsAt = new Date(activeOTP.createdAt.getTime() + OTP_CONFIG.RESEND_COOLDOWN_SECONDS * 1000);
+      if (cooldownEndsAt > new Date()) {
+        const remainingSeconds = Math.ceil((cooldownEndsAt.getTime() - Date.now()) / 1000);
+        throw new ApiError(429, `${AUTH_MESSAGES.OTP_RESEND_COOLDOWN} ${remainingSeconds} seconds`);
+      }
+      await otpRepository.consumeOTP(activeOTP._id);
+    }
+
+    await userRepository.setPendingEmail(userId, newEmail);
+
+    const otp = generateOTP();
+
+    const hashedOTP = await bcrypt.hash(otp, Number(process.env.BCRYPT_SALT_ROUNDS));
+
+    await otpRepository.create({
+      userId: user._id,
+      email: newEmail,
+      otpHash: hashedOTP,
+      purpose: OTP_PURPOSE.CHANGE_EMAIL,
+      expiresAt: new Date(Date.now() + OTP_CONFIG.EXPIRY_MINUTES * 60 * 1000)
+
+    });
+    await sendMail({
+      to: newEmail,
+      subject: "Email change OTP",
+      html: otpTemplate(user.name, otp)
+    });
+
+    return {
+      message: AUTH_MESSAGES.OTP_SENT,
+      data: null
+    };
+  }
+
+  async verifyEmailChange(userId, data) {
+    if (!userId) {
+      throw new ApiError(401, AUTH_MESSAGES.UNAUTHORIZED);
+    }
+    const { code } = data;
+    if (!code) {
+      throw new ApiError(400, AUTH_MESSAGES.INVALID_CREDENTIALS);
+    }
+    //fetch user
+    const user = await userRepository.findById(userId);
+    if (!user) {
+      throw new ApiError(404, AUTH_MESSAGES.USER_NOT_FOUND);
+    }
+    if (!user.pendingEmail) {
+      throw new ApiError(400, AUTH_MESSAGES.INVALID_OR_EXPIRED_OTP);
+    }
+    const existingUser = await userRepository.findByEmail(user.pendingEmail);
+    if (existingUser && existingUser._id.toString() !== userId.toString()) {
+      throw new ApiError(400, AUTH_MESSAGES.INVALID_CREDENTIALS);
+    }
+    const otpRecord = await otpRepository.findActiveOTP(userId, OTP_PURPOSE.CHANGE_EMAIL);
+    if (!otpRecord) {
+      throw new ApiError(401, AUTH_MESSAGES.INVALID_OR_EXPIRED_OTP)
+    }
+    if (otpRecord.expiresAt <= new Date()) {
+      throw new ApiError(401, AUTH_MESSAGES.INVALID_OR_EXPIRED_OTP);
+    }
+    if (otpRecord.attempts >= OTP_CONFIG.MAX_OTP_ATTEMPTS) {
+      await otpRepository.consumeOTP(otpRecord._id);
+      throw new ApiError(401, AUTH_MESSAGES.INVALID_OR_EXPIRED_OTP);
+    }
+    //compare code
+    const isValidOTP = await bcrypt.compare(code, otpRecord.otpHash);
+    if (!isValidOTP) {
+      await otpRepository.incrementAttempts(otpRecord._id);
+      throw new ApiError(401, AUTH_MESSAGES.INVALID_OR_EXPIRED_OTP);
+    }
+    const consumedOTP = await otpRepository.consumeOTP(otpRecord._id);
+    if (!consumedOTP) {
+      throw new ApiError(400, AUTH_MESSAGES.INVALID_OR_EXPIRED_OTP);
+    }
+    await userRepository.completeEmailChange(userId, user.pendingEmail);
+    //revoke all existing refresh-token sessions
+    await refreshTokenRepository.revokeAllSessions(userId);
+    return {
+      message: AUTH_MESSAGES.EMAIL_CHANGED,
+      data: null
+    }
+
   }
 }
 

@@ -22,6 +22,9 @@ export const authenticate = async (req, res, next) => {
 
     //4. verify access token
     const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
+    if (decoded.type !== "access") {
+      throw new ApiError(401, AUTH_MESSAGES.UNAUTHORIZED);
+    }
 
     //5. check user still exists
     const user = await userRepository.findAuthUserById(decoded.userId);

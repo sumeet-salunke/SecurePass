@@ -102,6 +102,12 @@ export const AUTH_MESSAGES = Object.freeze({
 
   INVALID_RECOVERY_CODE: "Invalid recovery code. ",
 
-  RECOVERY_CODES_REGENERATED: "Recovery codes regenrated successfully."
+  RECOVERY_CODES_REGENERATED: "Recovery codes regenrated successfully.",
+
+  EMAIL_CHANGED: "Email changed successfully",
+
+
+
+
 
 });

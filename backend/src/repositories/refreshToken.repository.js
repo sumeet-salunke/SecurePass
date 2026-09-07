@@ -13,6 +13,12 @@ class RefreshTokenRepository {
     });
   }
 
+  async findByJti(jti) {
+    return await RefreshToken.findOne({
+      jti,
+    });
+  }
+
   async revokeById(id) {
     return await RefreshToken.findOneAndUpdate(
       {

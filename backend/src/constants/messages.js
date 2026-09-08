@@ -108,6 +108,8 @@ export const AUTH_MESSAGES = Object.freeze({
 
   ACCOUNT_DELETED: "Account deleted successfully",
 
+  LOGOUT_ALL_SUCCESS: "Logged out from all devices successfully."
+
 
 
 });

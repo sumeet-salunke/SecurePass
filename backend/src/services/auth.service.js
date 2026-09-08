@@ -1118,6 +1118,22 @@ class AuthService {
     }
 
   }
+
+  async logoutAllDevices(userId) {
+    //1. validate the authenticated user
+    if (!userId) {
+      throw new ApiError(401, AUTH_MESSAGES.UNAUTHORIZED);
+    }
+    //2. Delete all RefreshfreshTokens
+    const deletedTokens = await refreshTokenRepository.deleteAllByUserId(userId);
+    //3. Invlidate all existing access token
+    await userRepository.incrementTokenVersion(userId);
+    logger.info(`All sessions revoked for : ${userId}`);
+    return {
+      message: AUTH_MESSAGES.LOGOUT_ALL_SUCCESS,
+      data: null
+    }
+  }
 }
 
 export default new AuthService();

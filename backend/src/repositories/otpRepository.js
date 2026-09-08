@@ -53,6 +53,11 @@ class OTPRepository {
     })
   }
 
+  async deleteAllByUserId(userId) {
+    return await OTP.deleteMany({ userId });
+  }
+
+
 
 }
 export default new OTPRepository();

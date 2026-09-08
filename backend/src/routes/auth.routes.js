@@ -1,8 +1,8 @@
 import express from "express";
 import rateLimit from "express-rate-limit";
 
-import { registerSchema, verifyOTPSchema, loginSchema, changeEmailSchema, verifyEmailChangeSchema } from "../validations/auth.validation.js";
-import { register, verifyOTP, login, resendOTP, refreshToken, getSessions, revokeSession, revokeAllSessions, logout, changePassword, forgotPassword, resetPassword, setupMFA, verifyMFACode, verifyMFALogin, disableMFA, verifyRecoveryCodeLogin, regenerateRecoveryCodes, changeEmail, verifyEmailChange } from "../controllers/auth.controller.js";
+import { registerSchema, verifyOTPSchema, loginSchema, changeEmailSchema, verifyEmailChangeSchema, deleteAccountSchema } from "../validations/auth.validation.js";
+import { register, verifyOTP, login, resendOTP, refreshToken, getSessions, revokeSession, revokeAllSessions, logout, changePassword, forgotPassword, resetPassword, setupMFA, verifyMFACode, verifyMFALogin, disableMFA, verifyRecoveryCodeLogin, regenerateRecoveryCodes, changeEmail, verifyEmailChange, deleteAccount } from "../controllers/auth.controller.js";
 import validate from "../middlewares/validate.middleware.js";
 import { authenticate } from "../middlewares/auth.middleware.js";
 
@@ -42,6 +42,7 @@ router.post("/reset-password", resetPassword);
 
 router.post("/refresh", refreshToken);
 
+router.delete("/delete-account", authenticate, validate(deleteAccountSchema), deleteAccount);
 
 router.post("/logout", logout);
 

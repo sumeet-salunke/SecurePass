@@ -121,3 +121,8 @@ export const verifyEmailChange = asyncHandler(async (req, res) => {
   const result = await authService.verifyEmailChange(req.user.id, req.body);
   return res.status(200).json(new ApiResponse(200, result.message, result.data));
 });
+
+export const deleteAccount = asyncHandler(async (req, res) => {
+  const result = await authService.deleteAccount(req.user.id, req.body);
+  res.status(200).json(new ApiResponse(200, result.message, result.data));
+});

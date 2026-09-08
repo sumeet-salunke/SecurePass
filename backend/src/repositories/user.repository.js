@@ -83,6 +83,7 @@ class UserRepository {
   }
 
   async findByIdWithPasswordAndMFASecret(userId) {
+
     return await User.findById(userId).select("+password +mfaSecret");
   }
 

@@ -7,6 +7,7 @@ import generateOTP from "../utils/generateOTP.js";
 import calculateOTPExpiry from "../utils/calculateOTPExpity.js";
 import { sendMail } from "../config/mail.js";
 import otpTemplate from "../templates/otp.template.js";
+import accountDeletedTemplate from "../templates/accountDeletedtemplate.js";
 import logger from "../utils/logger.js";
 import { hashOTP } from "../helpers/hashOTP.js";
 import { OTP_PURPOSE } from "../constants/otpPurpose.js";
@@ -1054,6 +1055,66 @@ class AuthService {
     return {
       message: AUTH_MESSAGES.EMAIL_CHANGED,
       data: null
+    }
+
+  }
+
+  async deleteAccount(userId, data) {
+    //1. validate authenticated user
+    if (!userId) {
+      throw new ApiError(401, AUTH_MESSAGES.UNAUTHORIZED);
+    }
+    //2. extract confirmation credentials
+    const { currentPassword, code } = data || {};
+    if (!currentPassword) {
+      throw new ApiError(401, AUTH_MESSAGES.INVALID_CREDENTIALS);
+    }
+    //3. fetch the user with password and mfaSecret
+    const user = await userRepository.findByIdWithPasswordAndMFASecret(userId);
+    if (!user) {
+      throw new ApiError(404, AUTH_MESSAGES.USER_NOT_FOUND);
+    }
+
+    //4. verify current password
+    const isPasswordMatched = await bcrypt.compare(currentPassword, user.password);
+    if (!isPasswordMatched) {
+      throw new ApiError(400, AUTH_MESSAGES.INVALID_CREDENTIALS);
+    }
+    //5. if MFA is enabled, require MFA verification
+    if (user.mfaEnabled) {
+      if (!code) {
+        throw new ApiError(400, AUTH_MESSAGES.MFA_CODE_REQUIRED);
+      }
+      const isValidMFA = await verifyMFACode(code, user.mfaSecret);
+      if (!isValidMFA) {
+        throw new ApiError(401, AUTH_MESSAGES.INVALID_MFA_CODE);
+      }
+    }
+    const email = user.email;
+    const name = user.name;
+    //6. delete OTP records belonging to user
+    await otpRepository.deleteAllByUserId(userId);
+    //7. delete refresh-token/session records
+    await refreshTokenRepository.deleteAllByUserId(userId);
+    //8. finally delete the user
+    const deletedUser = await userRepository.deleteById(userId);
+    if (!deletedUser) {
+      throw new ApiError(404, AUTH_MESSAGES.USER_NOT_FOUND);
+
+    }
+    //notification should not be undo sucessful deletion
+    try {
+      await sendMail({
+        to: email,
+        subject: "Your SecurePass account has been deleted",
+        html: accountDeletedTemplate(name),
+      });
+    } catch (error) {
+      logger.error(`Failed to send account deletion mail: ${error.message}`);
+    }
+    return {
+      message: AUTH_MESSAGES.ACCOUNT_DELETED,
+      data: null,
     }
 
   }

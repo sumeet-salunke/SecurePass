@@ -97,6 +97,9 @@ class RefreshTokenRepository {
       }
     );
   }
+  async deleteAllByUserId(userId) {
+    return await RefreshToken.deleteMany({ userId });
+  }
 
 
   /*

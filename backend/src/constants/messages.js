@@ -106,7 +106,7 @@ export const AUTH_MESSAGES = Object.freeze({
 
   EMAIL_CHANGED: "Email changed successfully",
 
-
+  ACCOUNT_DELETED: "Account deleted successfully",
 
 
 

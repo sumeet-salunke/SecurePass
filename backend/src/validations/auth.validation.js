@@ -30,3 +30,9 @@ export const changeEmailSchema = z.object({
 export const verifyEmailChangeSchema = z.object({
   code: z.string().trim().length(6)
 });
+
+export const deleteAccountSchema = z.object({
+  currentPassword: z.string()
+    .min(12, "Password should be at least 12 characters long.").max(128, "Password is too long."),
+  code: z.string().trim().optional()
+});

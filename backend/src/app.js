@@ -10,6 +10,7 @@ import compression from "compression";
 //routes
 import authRoutes from "./routes/auth.routes.js";
 import vaultRoutes from "./routes/vault.routes.js";
+import passwordGeneratorRoutes from "./routes/passwordGenerator.routes.js";
 import { globalMiddleware } from "./middlewares/global.middleware.js";
 
 
@@ -45,6 +46,7 @@ app.use(express.urlencoded
 
 app.use("/api/auth", authRoutes);
 app.use("/api/vault", vaultRoutes);
+app.use("/api/password-generator", passwordGeneratorRoutes);
 
 
 

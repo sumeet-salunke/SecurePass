@@ -1,5 +1,7 @@
 import vaultRepository from "../repositories/vault.repository.js";
 import credentialRepository from "../repositories/credential.repository.js";
+import secureNoteRepository from "../repositories/secureNote.repository.js";
+import totpRepository from "../repositories/totp.repository.js";
 import ApiError from "../utils/ApiError.js";
 import { AUTH_MESSAGES } from "../constants/messages.js";
 
@@ -34,10 +36,38 @@ class VaultService {
     return publicVault(vault);
   }
 
+  async getStats(userId) {
+    const vault = await vaultRepository.findByUserId(userId);
+    if (!vault) throw new ApiError(404, "Vault not found.");
+
+    const [
+      credentials,
+      favoriteCredentials,
+      secureNotes,
+      favoriteSecureNotes,
+      totp,
+    ] = await Promise.all([
+      credentialRepository.countByVaultId(vault._id),
+      credentialRepository.countFavoritesByVaultId(vault._id),
+      secureNoteRepository.countByVaultId(vault._id),
+      secureNoteRepository.countFavoritesByVaultId(vault._id),
+      totpRepository.countByVaultId(vault._id),
+    ]);
+
+    return {
+      credentials: { total: credentials, favorites: favoriteCredentials },
+      secureNotes: { total: secureNotes, favorites: favoriteSecureNotes },
+      totp: { total: totp },
+      updatedAt: vault.updatedAt,
+    };
+  }
+
   async deleteVault(userId) {
     const vault = await vaultRepository.findByUserId(userId);
     if (!vault) throw new ApiError(404, "Vault not found.");
     await credentialRepository.deleteByVaultId(vault._id);
+    await secureNoteRepository.deleteByVaultId(vault._id);
+    await totpRepository.deleteByVaultId(vault._id);
     await vaultRepository.deleteByUserId(userId);
     return null;
   }

@@ -9,8 +9,20 @@ class CredentialRepository {
     return await Credential.findOne({ _id: id, vaultId });
   }
 
-  async findByVaultId(vaultId) {
-    return await Credential.find({ vaultId }).sort({ createdAt: -1 });
+  async findByVaultId(vaultId, { page, limit, favorite } = {}) {
+    const filter = { vaultId };
+    if (favorite !== undefined) filter.favorite = favorite;
+    let query = Credential.find(filter).sort({ createdAt: -1 });
+    if (page && limit) query = query.skip((page - 1) * limit).limit(limit);
+    return await query;
+  }
+
+  async countByVaultId(vaultId) {
+    return await Credential.countDocuments({ vaultId });
+  }
+
+  async countFavoritesByVaultId(vaultId) {
+    return await Credential.countDocuments({ vaultId, favorite: true });
   }
 
   async updateByIdAndVaultId(id, vaultId, updateData) {

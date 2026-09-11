@@ -13,7 +13,7 @@ export const getCredential = asyncHandler(async (req, res) => {
 });
 
 export const listCredentials = asyncHandler(async (req, res) => {
-  const data = await credentialService.listCredentials(req.user.id);
+  const data = await credentialService.listCredentials(req.user.id, req.query);
   return res.status(200).json(new ApiResponse(200, "Credentials fetched successfully.", data));
 });
 

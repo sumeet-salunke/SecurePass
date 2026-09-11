@@ -17,6 +17,11 @@ export const getVault = asyncHandler(async (req, res) => {
   return res.status(200).json(new ApiResponse(200, "Vault fetched successfully.", data));
 });
 
+export const getVaultStats = asyncHandler(async (req, res) => {
+  const data = await vaultService.getStats(req.user.id);
+  return res.status(200).json(new ApiResponse(200, "Vault stats fetched successfully.", data));
+});
+
 export const deleteVault = asyncHandler(async (req, res) => {
   await vaultService.deleteVault(req.user.id);
   return res.status(200).json(new ApiResponse(200, "Vault deleted successfully.", null));

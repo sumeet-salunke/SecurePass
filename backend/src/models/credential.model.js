@@ -20,6 +20,16 @@ const credentialSchema = new mongoose.Schema({
     type: Buffer,
     required: true,
   },
+  category: {
+    type: String,
+    enum: ["Login", "Banking", "Email", "Social", "Work", "Shopping", "Other"],
+    default: "Login",
+  },
+  favorite: {
+    type: Boolean,
+    default: false,
+    index: true,
+  },
 }, { timestamps: true });
 
 credentialSchema.index({ vaultId: 1, createdAt: -1 });

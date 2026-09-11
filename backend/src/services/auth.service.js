@@ -23,6 +23,7 @@ import { generateMFASecret, generateMFAURI, verifyMFACode } from "../utils/totp.
 import { generateQRCode } from "../utils/qrCode.js";
 import { generateMFAChallenge, verifyMFAChallenge } from "../utils/mfaChallenge.js";
 import { generateRecoveryCodes } from "../utils/recoveryCode.js";
+import vaultService from "./vault.service.js";
 
 
 class AuthService {
@@ -1096,7 +1097,11 @@ class AuthService {
     await otpRepository.deleteAllByUserId(userId);
     //7. delete refresh-token/session records
     await refreshTokenRepository.deleteAllByUserId(userId);
-    //8. finally delete the user
+    //8. delete encrypted vault data before deleting its owner
+    await vaultService.deleteVault(userId).catch((error) => {
+      if (error.statusCode !== 404) throw error;
+    });
+    //9. finally delete the user
     const deletedUser = await userRepository.deleteById(userId);
     if (!deletedUser) {
       throw new ApiError(404, AUTH_MESSAGES.USER_NOT_FOUND);

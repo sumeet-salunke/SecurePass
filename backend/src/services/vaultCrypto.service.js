@@ -82,7 +82,7 @@ export const encryptData = (plainText, vaultEncryptionKey) => {
 
   //encrypt the plaintext
   const encrypted = Buffer.concat([
-    cipher.update(plainText, "uft8"),
+    cipher.update(plainText, "utf8"),
     cipher.final(),
   ]);
   //GCM generates an authenticated tag

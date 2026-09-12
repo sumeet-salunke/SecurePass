@@ -4,6 +4,7 @@ import { getAccessToken, setAccessToken, clearAccessToken } from "./token.js";
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:5000",
   withCredentials: true,
+  timeout: 15000,
 });
 
 // Request interceptor: attach in-memory access token
@@ -38,14 +39,18 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // Do not attempt refresh on auth endpoints to prevent endless loops
+    // Do not attempt refresh on auth endpoints or retry requests
     const isAuthEndpoint =
       originalRequest?.url?.includes("/api/auth/refresh") ||
       originalRequest?.url?.includes("/api/auth/login") ||
       originalRequest?.url?.includes("/api/auth/register") ||
       originalRequest?.url?.includes("/api/auth/verify-otp") ||
+      originalRequest?.url?.includes("/api/auth/resend-otp") ||
+      originalRequest?.url?.includes("/api/auth/forgot-password") ||
+      originalRequest?.url?.includes("/api/auth/reset-password") ||
       originalRequest?.url?.includes("/api/auth/mfa/verify-login") ||
-      originalRequest?.url?.includes("/api/auth/mfa/verify-recovery");
+      originalRequest?.url?.includes("/api/auth/mfa/verify-recovery") ||
+      originalRequest?.url?.includes("/api/auth/logout");
 
     if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
       if (isRefreshing) {
@@ -53,6 +58,7 @@ api.interceptors.response.use(
           failedQueue.push({ resolve, reject });
         })
           .then((token) => {
+            originalRequest.headers = originalRequest.headers || {};
             originalRequest.headers.Authorization = `Bearer ${token}`;
             return api(originalRequest);
           })
@@ -66,7 +72,7 @@ api.interceptors.response.use(
         const response = await axios.post(
           `${import.meta.env.VITE_API_URL || "http://localhost:5000"}/api/auth/refresh`,
           {},
-          { withCredentials: true }
+          { withCredentials: true, timeout: 10000 }
         );
 
         const newAccessToken = response.data?.data?.accessToken;
@@ -76,6 +82,7 @@ api.interceptors.response.use(
 
         setAccessToken(newAccessToken);
         processQueue(null, newAccessToken);
+        originalRequest.headers = originalRequest.headers || {};
         originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
         return api(originalRequest);
       } catch (refreshError) {

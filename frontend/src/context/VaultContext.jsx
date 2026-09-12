@@ -39,7 +39,10 @@ export const VaultProvider = ({ children }) => {
   const [vekKey, setVekKey] = useState(null); // CryptoKey kept strictly in memory
 
   const [vaultLoading, setVaultLoading] = useState(false);
+  const [vaultError, setVaultError] = useState(null);
   const [vaultStats, setVaultStats] = useState(null);
+  const [itemsLoading, setItemsLoading] = useState(false);
+  const [itemsError, setItemsError] = useState(null);
 
   const [credentials, setCredentials] = useState([]);
   const [secureNotes, setSecureNotes] = useState([]);
@@ -56,11 +59,13 @@ export const VaultProvider = ({ children }) => {
       setSecureNotes([]);
       setTotpList([]);
       setVaultStats(null);
+      setVaultError(null);
       return;
     }
 
     try {
       setVaultLoading(true);
+      setVaultError(null);
       const res = await getVault();
       if (res?.data) {
         setHasVault(true);
@@ -70,6 +75,8 @@ export const VaultProvider = ({ children }) => {
       if (err.response?.status === 404) {
         setHasVault(false);
         setVaultMetadata(null);
+      } else {
+        setVaultError(err.response?.data?.message || err.message || "Failed to load vault status.");
       }
     } finally {
       setVaultLoading(false);
@@ -88,6 +95,7 @@ export const VaultProvider = ({ children }) => {
     setSecureNotes([]);
     setTotpList([]);
   }, []);
+
 
   // Fetch Vault Stats
   const fetchStats = useCallback(async () => {
@@ -223,6 +231,25 @@ export const VaultProvider = ({ children }) => {
     }
   }, [vekKey]);
 
+  // Refresh all vault data
+  const refreshVaultData = useCallback(async (activeVek = vekKey) => {
+    if (!activeVek) return;
+    try {
+      setItemsLoading(true);
+      setItemsError(null);
+      await Promise.all([
+        fetchCredentials(activeVek),
+        fetchNotes(activeVek),
+        fetchTOTP(activeVek),
+        fetchStats(),
+      ]);
+    } catch (err) {
+      setItemsError(err.response?.data?.message || err.message || "Failed to load decrypted items.");
+    } finally {
+      setItemsLoading(false);
+    }
+  }, [fetchCredentials, fetchNotes, fetchTOTP, fetchStats, vekKey]);
+
   // Unlock Vault using Master Password
   const unlockVault = async (masterPassword) => {
     if (!vaultMetadata) throw new Error("Vault not found.");
@@ -240,16 +267,12 @@ export const VaultProvider = ({ children }) => {
     setVekKey(decryptedVek);
     setIsUnlocked(true);
 
-    // Refresh all data
-    await Promise.all([
-      fetchCredentials(decryptedVek),
-      fetchNotes(decryptedVek),
-      fetchTOTP(decryptedVek),
-      fetchStats(),
-    ]);
+    // Load and decrypt all items with active VEK
+    await refreshVaultData(decryptedVek);
 
     return true;
   };
+
 
   // Setup New Vault for First-Time Users
   const setupNewVault = async (masterPassword) => {
@@ -523,7 +546,11 @@ export const VaultProvider = ({ children }) => {
         vaultMetadata,
         isUnlocked,
         vaultLoading,
+        vaultError,
         vaultStats,
+        itemsLoading,
+        itemsError,
+        refreshVaultData,
         credentials,
         secureNotes,
         totpList,

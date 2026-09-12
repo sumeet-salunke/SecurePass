@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
+import { formatErrorMessage } from "../../utils/errors.js";
 
 export default function MFAChallengeView() {
   const { completeMFALogin, completeRecoveryLogin, cancelMFAChallenge } = useAuth();
@@ -12,6 +13,25 @@ export default function MFAChallengeView() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const handleTotpPaste = (e) => {
+    e.preventDefault();
+    const text = (e.clipboardData || window.clipboardData).getData("text");
+    const digits = text.replace(/\D/g, "").slice(0, 6);
+    if (digits) {
+      setCode(digits);
+      if (error) setError("");
+    }
+  };
+
+  const handleRecoveryPaste = (e) => {
+    e.preventDefault();
+    const text = (e.clipboardData || window.clipboardData).getData("text");
+    if (text) {
+      setRecoveryCode(text.trim().toUpperCase());
+      if (error) setError("");
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -21,24 +41,25 @@ export default function MFAChallengeView() {
 
       if (mode === "totp") {
         if (code.length !== 6) {
-          setError("Please enter the 6-digit authenticator code.");
+          setError("Please enter the complete 6-digit authenticator code.");
           return;
         }
         await completeMFALogin(code);
         toast.success("MFA verified! Welcome back.");
       } else {
-        if (!recoveryCode.trim()) {
-          setError("Please enter a recovery code.");
+        const cleanRecovery = recoveryCode.trim();
+        if (!cleanRecovery) {
+          setError("Please enter your single-use recovery code.");
           return;
         }
-        await completeRecoveryLogin(recoveryCode.trim());
+        await completeRecoveryLogin(cleanRecovery);
         toast.success("Recovery code verified! Session restored.");
       }
     } catch (err) {
-      const errMsg =
-        err.response?.data?.message ||
-        err.message ||
-        (mode === "totp" ? "Invalid authenticator code." : "Invalid recovery code.");
+      const errMsg = formatErrorMessage(
+        err,
+        mode === "totp" ? "Invalid authenticator code." : "Invalid recovery code."
+      );
       setError(errMsg);
     } finally {
       setLoading(false);
@@ -60,7 +81,7 @@ export default function MFAChallengeView() {
       </div>
 
       {error && (
-        <div className="toast-card toast-error" style={{ marginBottom: "1.25rem", width: "100%", maxWidth: "100%" }}>
+        <div className="toast-card toast-error" role="alert" aria-live="assertive" style={{ marginBottom: "1.25rem", width: "100%", maxWidth: "100%" }}>
           <div className="toast-icon">✕</div>
           <div className="toast-content">
             <p className="toast-message">{error}</p>
@@ -81,7 +102,12 @@ export default function MFAChallengeView() {
               placeholder="123456"
               value={code}
               maxLength={6}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+              onChange={(e) => {
+                setCode(e.target.value.replace(/\D/g, "").slice(0, 6));
+                if (error) setError("");
+              }}
+              onPaste={handleTotpPaste}
+              disabled={loading}
               style={{ textAlign: "center", fontSize: "1.35rem", letterSpacing: "0.2em" }}
               required
               autoFocus
@@ -100,7 +126,12 @@ export default function MFAChallengeView() {
               className="form-input mono"
               placeholder="XXXXX-XXXXX"
               value={recoveryCode}
-              onChange={(e) => setRecoveryCode(e.target.value.toUpperCase())}
+              onChange={(e) => {
+                setRecoveryCode(e.target.value.toUpperCase());
+                if (error) setError("");
+              }}
+              onPaste={handleRecoveryPaste}
+              disabled={loading}
               style={{ textAlign: "center", fontSize: "1.15rem", letterSpacing: "0.1em" }}
               required
               autoFocus

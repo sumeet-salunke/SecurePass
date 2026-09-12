@@ -110,20 +110,24 @@ export async function decryptVaultKey(encryptedVaultKeyB64, vaultKeyIvB64, vault
   combined.set(ciphertext, 0);
   combined.set(authTag, ciphertext.length);
 
-  const decryptedBuffer = await window.crypto.subtle.decrypt(
-    { name: "AES-GCM", iv, tagLength: 128 },
-    kekKey,
-    combined
-  );
+  try {
+    const decryptedBuffer = await window.crypto.subtle.decrypt(
+      { name: "AES-GCM", iv, tagLength: 128 },
+      kekKey,
+      combined
+    );
 
-  // Import raw decrypted 32-byte VEK into a CryptoKey for encrypting/decrypting vault items
-  return await window.crypto.subtle.importKey(
-    "raw",
-    decryptedBuffer,
-    { name: "AES-GCM", length: 256 },
-    false,
-    ["encrypt", "decrypt"]
-  );
+    // Import raw decrypted 32-byte VEK into a CryptoKey for encrypting/decrypting vault items
+    return await window.crypto.subtle.importKey(
+      "raw",
+      decryptedBuffer,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["encrypt", "decrypt"]
+    );
+  } catch (err) {
+    throw new Error("Incorrect master password. Cryptographic authentication failed.");
+  }
 }
 
 /**
@@ -267,7 +271,25 @@ export async function generateTOTPCode(secret, algorithm = "SHA1", digits = 6, p
 }
 
 /**
- * Client-Side Password Generator
+ * Cryptographically Secure Pseudo-Random Integer in range [0, max - 1]
+ * Strictly uses window.crypto.getRandomValues with rejection sampling to eliminate modulo bias.
+ */
+export function getSecureRandomInt(max) {
+  if (max <= 1) return 0;
+  const maxUint32 = 0xffffffff;
+  const limit = maxUint32 - (maxUint32 % max);
+  const randomBuffer = new Uint32Array(1);
+  let rand;
+  do {
+    window.crypto.getRandomValues(randomBuffer);
+    rand = randomBuffer[0];
+  } while (rand >= limit);
+  return rand % max;
+}
+
+/**
+ * Client-Side Cryptographically Secure Password Generator
+ * Strictly uses Web Crypto API (crypto.getRandomValues) with 0% Math.random().
  */
 export function generatePassword(options = {}) {
   const {
@@ -275,14 +297,14 @@ export function generatePassword(options = {}) {
     uppercase = true,
     lowercase = true,
     numbers = true,
-    symbols = true
+    symbols = true,
   } = options;
 
   const charSets = {
     uppercase: "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
     lowercase: "abcdefghijklmnopqrstuvwxyz",
     numbers: "0123456789",
-    symbols: "!@#$%^&*()_+-=[]{}|;:,.<>?"
+    symbols: "!@#$%^&*()_+-=[]{}|;:,.<>?",
   };
 
   let allowed = "";
@@ -290,36 +312,46 @@ export function generatePassword(options = {}) {
 
   if (lowercase) {
     allowed += charSets.lowercase;
-    required.push(charSets.lowercase[Math.floor(Math.random() * charSets.lowercase.length)]);
+    const randIdx = getSecureRandomInt(charSets.lowercase.length);
+    required.push(charSets.lowercase[randIdx]);
   }
   if (uppercase) {
     allowed += charSets.uppercase;
-    required.push(charSets.uppercase[Math.floor(Math.random() * charSets.uppercase.length)]);
+    const randIdx = getSecureRandomInt(charSets.uppercase.length);
+    required.push(charSets.uppercase[randIdx]);
   }
   if (numbers) {
     allowed += charSets.numbers;
-    required.push(charSets.numbers[Math.floor(Math.random() * charSets.numbers.length)]);
+    const randIdx = getSecureRandomInt(charSets.numbers.length);
+    required.push(charSets.numbers[randIdx]);
   }
   if (symbols) {
     allowed += charSets.symbols;
-    required.push(charSets.symbols[Math.floor(Math.random() * charSets.symbols.length)]);
+    const randIdx = getSecureRandomInt(charSets.symbols.length);
+    required.push(charSets.symbols[randIdx]);
   }
 
-  if (allowed.length === 0) allowed = charSets.lowercase + charSets.numbers;
+  // Fallback if all options were unchecked
+  if (allowed.length === 0) {
+    allowed = charSets.lowercase + charSets.numbers;
+    const randIdx = getSecureRandomInt(charSets.lowercase.length);
+    required.push(charSets.lowercase[randIdx]);
+  }
 
-  const randomValues = new Uint32Array(length);
-  window.crypto.getRandomValues(randomValues);
-
+  const safeLength = Math.max(8, Math.min(128, length));
   const passwordChars = [...required];
-  while (passwordChars.length < length) {
-    const randIndex = randomValues[passwordChars.length] % allowed.length;
-    passwordChars.push(allowed[randIndex]);
+
+  while (passwordChars.length < safeLength) {
+    const randIdx = getSecureRandomInt(allowed.length);
+    passwordChars.push(allowed[randIdx]);
   }
 
-  // Shuffle using Fisher-Yates
+  // Cryptographically secure Fisher-Yates shuffle
   for (let i = passwordChars.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [passwordChars[i], passwordChars[j]] = [passwordChars[j], passwordChars[i]];
+    const j = getSecureRandomInt(i + 1);
+    const temp = passwordChars[i];
+    passwordChars[i] = passwordChars[j];
+    passwordChars[j] = temp;
   }
 
   return passwordChars.join("");
@@ -332,13 +364,14 @@ export function calculatePasswordStrength(password) {
   if (!password) return { score: 0, label: "Empty", color: "#64748b" };
 
   let score = 0;
-  if (password.length >= 8) score += 20;
+  if (password.length >= 8) score += 15;
   if (password.length >= 12) score += 20;
   if (password.length >= 16) score += 15;
+  if (password.length >= 24) score += 10;
   if (/[a-z]/.test(password)) score += 10;
   if (/[A-Z]/.test(password)) score += 10;
   if (/[0-9]/.test(password)) score += 10;
-  if (/[^a-zA-Z0-9]/.test(password)) score += 15;
+  if (/[^a-zA-Z0-9]/.test(password)) score += 10;
 
   score = Math.min(100, score);
 
@@ -347,3 +380,24 @@ export function calculatePasswordStrength(password) {
   if (score < 90) return { score, label: "Strong", color: "#10b981" };
   return { score, label: "Very Strong", color: "#38bdf8" };
 }
+
+/**
+ * Validate Master Password against zero-knowledge security requirements
+ */
+export function validateMasterPasswordPolicy(password = "") {
+  const minLength = password.length >= 12;
+  const hasUpper = /[A-Z]/.test(password);
+  const hasLower = /[a-z]/.test(password);
+  const hasNumber = /[0-9]/.test(password);
+  const hasSymbol = /[^a-zA-Z0-9]/.test(password);
+
+  return {
+    minLength,
+    hasUpper,
+    hasLower,
+    hasNumber,
+    hasSymbol,
+    isValid: minLength && (hasUpper || hasLower) && (hasNumber || hasSymbol)
+  };
+}
+

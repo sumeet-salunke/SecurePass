@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { verifyOTP, resendOTP } from "../../api/authApi.js";
 import { useToast } from "../../context/ToastContext.jsx";
+import { formatErrorMessage } from "../../utils/errors.js";
 
 export default function VerifyOtpView({ email, onVerified, onSwitchToLogin }) {
   const toast = useToast();
@@ -19,6 +20,22 @@ export default function VerifyOtpView({ email, onVerified, onSwitchToLogin }) {
     return () => clearInterval(timer);
   }, [cooldown]);
 
+  const handleOtpChange = (e) => {
+    const val = e.target.value.replace(/\D/g, "").slice(0, 6);
+    setOtp(val);
+    if (error) setError("");
+  };
+
+  const handlePaste = (e) => {
+    e.preventDefault();
+    const pastedText = (e.clipboardData || window.clipboardData).getData("text");
+    const digits = pastedText.replace(/\D/g, "").slice(0, 6);
+    if (digits) {
+      setOtp(digits);
+      if (error) setError("");
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (otp.length !== 6) {
@@ -29,11 +46,12 @@ export default function VerifyOtpView({ email, onVerified, onSwitchToLogin }) {
     try {
       setLoading(true);
       setError("");
-      const res = await verifyOTP({ email, otp });
+      const cleanEmail = email.trim();
+      const res = await verifyOTP({ email: cleanEmail, otp });
       toast.success(res?.message || "Account verified successfully! You can now sign in.");
       onVerified();
     } catch (err) {
-      const errMsg = err.response?.data?.message || err.message || "Invalid or expired verification code.";
+      const errMsg = formatErrorMessage(err, "Invalid or expired verification code.");
       setError(errMsg);
     } finally {
       setLoading(false);
@@ -46,11 +64,12 @@ export default function VerifyOtpView({ email, onVerified, onSwitchToLogin }) {
     try {
       setResendLoading(true);
       setError("");
-      const res = await resendOTP({ email });
+      const cleanEmail = email.trim();
+      const res = await resendOTP({ email: cleanEmail });
       toast.info(res?.message || "A new verification code has been sent.");
       setCooldown(60);
     } catch (err) {
-      const errMsg = err.response?.data?.message || err.message || "Failed to resend verification code.";
+      const errMsg = formatErrorMessage(err, "Failed to resend verification code.");
       setError(errMsg);
     } finally {
       setResendLoading(false);
@@ -68,7 +87,7 @@ export default function VerifyOtpView({ email, onVerified, onSwitchToLogin }) {
       </div>
 
       {error && (
-        <div className="toast-card toast-error" style={{ marginBottom: "1.25rem", width: "100%", maxWidth: "100%" }}>
+        <div className="toast-card toast-error" role="alert" aria-live="assertive" style={{ marginBottom: "1.25rem", width: "100%", maxWidth: "100%" }}>
           <div className="toast-icon">✕</div>
           <div className="toast-content">
             <p className="toast-message">{error}</p>
@@ -88,7 +107,9 @@ export default function VerifyOtpView({ email, onVerified, onSwitchToLogin }) {
             placeholder="123456"
             value={otp}
             maxLength={6}
-            onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+            onChange={handleOtpChange}
+            onPaste={handlePaste}
+            disabled={loading}
             style={{ textAlign: "center", fontSize: "1.35rem", letterSpacing: "0.2em" }}
             required
             autoFocus

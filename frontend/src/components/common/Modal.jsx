@@ -21,9 +21,10 @@ export default function Modal({ isOpen, onClose, title, children, footer, maxWid
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
+        aria-labelledby="modal-title"
       >
         <div className="modal-header">
-          <h2 className="modal-title">{title}</h2>
+          <h2 className="modal-title" id="modal-title">{title}</h2>
           <button className="icon-btn" onClick={onClose} aria-label="Close modal">
             ✕
           </button>

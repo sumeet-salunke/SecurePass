@@ -15,6 +15,9 @@ import {
   deleteAccount as apiDeleteAccount,
 } from "../../api/authApi.js";
 import Modal from "../../components/common/Modal.jsx";
+import ConfirmModal from "../../components/common/ConfirmModal.jsx";
+import { formatErrorMessage } from "../../utils/errors.js";
+import { calculatePasswordStrength } from "../../utils/crypto.js";
 
 export default function SettingsView({ initialSubTab = "password", onNavigateTab }) {
   const { user, setUser, logoutUser } = useAuth();
@@ -33,10 +36,14 @@ export default function SettingsView({ initialSubTab = "password", onNavigateTab
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
 
   // Change Email state
   const [emailCurrentPassword, setEmailCurrentPassword] = useState("");
+  const [showEmailCurrentPassword, setShowEmailCurrentPassword] = useState(false);
   const [newEmail, setNewEmail] = useState("");
   const [emailOtp, setEmailOtp] = useState("");
   const [emailStep, setEmailStep] = useState(1); // 1 = enter new email, 2 = verify OTP
@@ -49,18 +56,25 @@ export default function SettingsView({ initialSubTab = "password", onNavigateTab
   const [mfaModalOpen, setMfaModalOpen] = useState(false);
   const [mfaAction, setMfaAction] = useState(""); // 'setup' | 'disable' | 'regenerate'
   const [mfaConfirmPassword, setMfaConfirmPassword] = useState("");
+  const [showMfaConfirmPassword, setShowMfaConfirmPassword] = useState(false);
   const [mfaConfirmCode, setMfaConfirmCode] = useState("");
   const [mfaLoading, setMfaLoading] = useState(false);
 
   // Sessions state
   const [sessions, setSessions] = useState([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [sessionActionId, setSessionActionId] = useState(null);
+  const [revokeAllModalOpen, setRevokeAllModalOpen] = useState(false);
+  const [revokeAllLoading, setRevokeAllLoading] = useState(false);
 
   // Delete Account state
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
+  const [showDeletePassword, setShowDeletePassword] = useState(false);
   const [deleteMfaCode, setDeleteMfaCode] = useState("");
   const [deleteLoading, setDeleteLoading] = useState(false);
+
+  const newPasswordStrength = calculatePasswordStrength(newPassword);
 
   // Fetch Sessions
   const fetchSessions = async () => {
@@ -69,7 +83,7 @@ export default function SettingsView({ initialSubTab = "password", onNavigateTab
       const res = await apiGetSessions();
       setSessions(res.data?.sessions || []);
     } catch (err) {
-      console.error("Failed to load sessions:", err);
+      toast.error(formatErrorMessage(err, "Failed to load active sessions."));
     } finally {
       setSessionsLoading(false);
     }
@@ -96,10 +110,10 @@ export default function SettingsView({ initialSubTab = "password", onNavigateTab
     try {
       setPasswordLoading(true);
       await apiChangePassword({ currentPassword, newPassword });
-      toast.success("Password changed successfully! Please sign in again.");
+      toast.success("Password changed successfully! Please sign in again with your new password.");
       logoutUser();
     } catch (err) {
-      toast.error(err.response?.data?.message || err.message || "Failed to change password.");
+      toast.error(formatErrorMessage(err, "Failed to change password. Please verify your current password."));
     } finally {
       setPasswordLoading(false);
     }
@@ -108,13 +122,19 @@ export default function SettingsView({ initialSubTab = "password", onNavigateTab
   // Handle Request Email Change
   const handleRequestEmailChange = async (e) => {
     e.preventDefault();
+    const cleanEmail = newEmail.trim();
+    if (!cleanEmail) {
+      toast.error("Please enter a valid new email address.");
+      return;
+    }
+
     try {
       setEmailLoading(true);
-      const res = await apiChangeEmail({ currentPassword: emailCurrentPassword, newEmail });
+      const res = await apiChangeEmail({ currentPassword: emailCurrentPassword, newEmail: cleanEmail });
       toast.info(res?.message || "Verification code sent to your new email.");
       setEmailStep(2);
     } catch (err) {
-      toast.error(err.response?.data?.message || err.message || "Failed to initiate email change.");
+      toast.error(formatErrorMessage(err, "Failed to initiate email change. Verify your password."));
     } finally {
       setEmailLoading(false);
     }
@@ -123,13 +143,18 @@ export default function SettingsView({ initialSubTab = "password", onNavigateTab
   // Handle Verify Email Change
   const handleVerifyEmailChange = async (e) => {
     e.preventDefault();
+    if (emailOtp.trim().length !== 6) {
+      toast.error("Please enter the 6-digit verification code.");
+      return;
+    }
+
     try {
       setEmailLoading(true);
-      await apiVerifyEmailChange({ code: emailOtp });
+      await apiVerifyEmailChange({ code: emailOtp.trim() });
       toast.success("Email changed successfully! Please log in with your new email.");
       logoutUser();
     } catch (err) {
-      toast.error(err.response?.data?.message || err.message || "Invalid email change code.");
+      toast.error(formatErrorMessage(err, "Invalid email verification code."));
     } finally {
       setEmailLoading(false);
     }
@@ -144,7 +169,7 @@ export default function SettingsView({ initialSubTab = "password", onNavigateTab
       setMfaAction("setup");
       setMfaModalOpen(true);
     } catch (err) {
-      toast.error(err.response?.data?.message || err.message || "Failed to initialize MFA setup.");
+      toast.error(formatErrorMessage(err, "Failed to initialize MFA setup."));
     } finally {
       setMfaLoading(false);
     }
@@ -153,14 +178,19 @@ export default function SettingsView({ initialSubTab = "password", onNavigateTab
   // Verify MFA Setup
   const handleVerifyMFASetup = async (e) => {
     e.preventDefault();
+    if (mfaVerifyCode.trim().length !== 6) {
+      toast.error("Please enter the complete 6-digit code.");
+      return;
+    }
+
     try {
       setMfaLoading(true);
-      const res = await apiVerifyMFASetup({ code: mfaVerifyCode });
+      const res = await apiVerifyMFASetup({ code: mfaVerifyCode.trim() });
       setMfaRecoveryCodes(res.data?.recoveryCodes || []);
       toast.success("Two-Factor Authentication enabled!");
       setUser((prev) => ({ ...prev, mfaEnabled: true }));
     } catch (err) {
-      toast.error(err.response?.data?.message || err.message || "Invalid MFA code.");
+      toast.error(formatErrorMessage(err, "Invalid MFA code."));
     } finally {
       setMfaLoading(false);
     }
@@ -171,14 +201,14 @@ export default function SettingsView({ initialSubTab = "password", onNavigateTab
     e.preventDefault();
     try {
       setMfaLoading(true);
-      await apiDisableMFA({ password: mfaConfirmPassword, code: mfaConfirmCode });
+      await apiDisableMFA({ password: mfaConfirmPassword, code: mfaConfirmCode.trim() });
       toast.success("Two-Factor Authentication disabled.");
       setUser((prev) => ({ ...prev, mfaEnabled: false }));
       setMfaModalOpen(false);
       setMfaConfirmPassword("");
       setMfaConfirmCode("");
     } catch (err) {
-      toast.error(err.response?.data?.message || err.message || "Failed to disable MFA.");
+      toast.error(formatErrorMessage(err, "Failed to disable MFA. Verify password and code."));
     } finally {
       setMfaLoading(false);
     }
@@ -189,13 +219,13 @@ export default function SettingsView({ initialSubTab = "password", onNavigateTab
     e.preventDefault();
     try {
       setMfaLoading(true);
-      const res = await apiRegenerateRecoveryCodes({ password: mfaConfirmPassword, code: mfaConfirmCode });
+      const res = await apiRegenerateRecoveryCodes({ password: mfaConfirmPassword, code: mfaConfirmCode.trim() });
       setMfaRecoveryCodes(res.data?.recoveryCodes || []);
       toast.success("New recovery codes generated!");
       setMfaConfirmPassword("");
       setMfaConfirmCode("");
     } catch (err) {
-      toast.error(err.response?.data?.message || err.message || "Failed to regenerate codes.");
+      toast.error(formatErrorMessage(err, "Failed to regenerate codes. Verify password and code."));
     } finally {
       setMfaLoading(false);
     }
@@ -204,22 +234,29 @@ export default function SettingsView({ initialSubTab = "password", onNavigateTab
   // Revoke Single Session
   const handleRevokeSession = async (sessionId) => {
     try {
+      setSessionActionId(sessionId);
       await apiRevokeSession(sessionId);
       toast.info("Session revoked.");
       fetchSessions();
     } catch (err) {
-      toast.error(err.message || "Failed to revoke session.");
+      toast.error(formatErrorMessage(err, "Failed to revoke session."));
+    } finally {
+      setSessionActionId(null);
     }
   };
 
   // Revoke All Sessions / Logout All Devices
   const handleLogoutAllDevices = async () => {
     try {
+      setRevokeAllLoading(true);
       await apiLogoutAllDevices();
-      toast.info("All device sessions revoked. Please log in again.");
-      logoutUser();
+      toast.info("All other device sessions revoked.");
+      setRevokeAllModalOpen(false);
+      fetchSessions();
     } catch (err) {
-      toast.error(err.message || "Failed to revoke all sessions.");
+      toast.error(formatErrorMessage(err, "Failed to revoke all sessions."));
+    } finally {
+      setRevokeAllLoading(false);
     }
   };
 
@@ -230,12 +267,12 @@ export default function SettingsView({ initialSubTab = "password", onNavigateTab
       setDeleteLoading(true);
       await apiDeleteAccount({
         currentPassword: deletePassword,
-        code: deleteMfaCode || undefined,
+        code: deleteMfaCode.trim() || undefined,
       });
       toast.success("Your SecurePass account has been permanently deleted.");
       logoutUser();
     } catch (err) {
-      toast.error(err.response?.data?.message || err.message || "Failed to delete account.");
+      toast.error(formatErrorMessage(err, "Failed to delete account. Verify your password."));
     } finally {
       setDeleteLoading(false);
     }
@@ -254,24 +291,33 @@ export default function SettingsView({ initialSubTab = "password", onNavigateTab
 
   return (
     <div className="page-wrapper animate-fade-in">
-      <div className="section-header" style={{ marginBottom: "1.75rem" }}>
+      <div className="section-header">
         <div>
-          <h1 className="section-title" style={{ fontSize: "1.5rem" }}>
+          <h1 className="section-title">
             Security & Account Settings
           </h1>
-          <p style={{ color: "var(--text-secondary)", fontSize: "0.875rem" }}>
+          <p style={{ color: "var(--text-secondary)", fontSize: "0.875rem", marginTop: "0.25rem" }}>
             Manage master passwords, two-factor authentication, active sessions, and credentials
           </p>
         </div>
+
+        <button
+          className="btn btn-secondary btn-sm"
+          onClick={() => onNavigateTab && onNavigateTab("account")}
+          title="Go to Account & Profile"
+        >
+          👤 Account Profile
+        </button>
       </div>
 
-      <div style={{ display: "flex", gap: "2rem", flexWrap: "wrap" }}>
+      <div className="settings-container">
         {/* Settings Navigation */}
-        <div style={{ width: "220px", flexShrink: 0 }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+        <div className="settings-sidebar">
+          <nav className="settings-subtabs" aria-label="Settings Navigation">
             <button
               className={`nav-item ${activeSubTab === "password" ? "active" : ""}`}
               onClick={() => handleSubTabChange("password")}
+              aria-current={activeSubTab === "password" ? "page" : undefined}
             >
               <div className="nav-item-left">
                 <span>🔑</span>
@@ -282,6 +328,7 @@ export default function SettingsView({ initialSubTab = "password", onNavigateTab
             <button
               className={`nav-item ${activeSubTab === "email" ? "active" : ""}`}
               onClick={() => handleSubTabChange("email")}
+              aria-current={activeSubTab === "email" ? "page" : undefined}
             >
               <div className="nav-item-left">
                 <span>✉️</span>
@@ -292,6 +339,7 @@ export default function SettingsView({ initialSubTab = "password", onNavigateTab
             <button
               className={`nav-item ${activeSubTab === "security" ? "active" : ""}`}
               onClick={() => handleSubTabChange("security")}
+              aria-current={activeSubTab === "security" ? "page" : undefined}
             >
               <div className="nav-item-left">
                 <span>🛡️</span>
@@ -303,6 +351,7 @@ export default function SettingsView({ initialSubTab = "password", onNavigateTab
             <button
               className={`nav-item ${activeSubTab === "sessions" ? "active" : ""}`}
               onClick={() => handleSubTabChange("sessions")}
+              aria-current={activeSubTab === "sessions" ? "page" : undefined}
             >
               <div className="nav-item-left">
                 <span>📱</span>
@@ -314,17 +363,18 @@ export default function SettingsView({ initialSubTab = "password", onNavigateTab
               className={`nav-item ${activeSubTab === "danger" ? "active" : ""}`}
               onClick={() => handleSubTabChange("danger")}
               style={{ color: "var(--accent-rose)" }}
+              aria-current={activeSubTab === "danger" ? "page" : undefined}
             >
               <div className="nav-item-left">
                 <span>⚠️</span>
                 <span>Delete Account</span>
               </div>
             </button>
-          </div>
+          </nav>
         </div>
 
         {/* Content Area */}
-        <div style={{ flex: 1, minWidth: "280px", maxWidth: "640px" }}>
+        <div className="settings-content">
           {/* CHANGE PASSWORD */}
           {activeSubTab === "password" && (
             <div className="auth-card" style={{ maxWidth: "100%", padding: "1.75rem", background: "var(--bg-surface)" }}>
@@ -337,40 +387,114 @@ export default function SettingsView({ initialSubTab = "password", onNavigateTab
 
               <form onSubmit={handleChangePassword}>
                 <div className="form-group">
-                  <label className="form-label">Current Password</label>
-                  <input
-                    type="password"
-                    className="form-input"
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                    required
-                  />
+                  <label className="form-label" htmlFor="settings-current-pwd">
+                    Current Password
+                  </label>
+                  <div className="form-input-wrapper">
+                    <input
+                      id="settings-current-pwd"
+                      type={showCurrentPassword ? "text" : "password"}
+                      className="form-input"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      placeholder="••••••••••••"
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="form-input-addon"
+                      onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                      title={showCurrentPassword ? "Hide password" : "Show password"}
+                      aria-label={showCurrentPassword ? "Hide current password" : "Show current password"}
+                    >
+                      {showCurrentPassword ? "👁️" : "👁️‍🗨️"}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">New Password (min 12 chars)</label>
-                  <input
-                    type="password"
-                    className="form-input"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    required
-                    minLength={12}
-                  />
+                  <label className="form-label" htmlFor="settings-new-pwd">
+                    New Password (min 12 chars)
+                  </label>
+                  <div className="form-input-wrapper">
+                    <input
+                      id="settings-new-pwd"
+                      type={showNewPassword ? "text" : "password"}
+                      className="form-input"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      disabled={passwordLoading}
+                      placeholder="••••••••••••"
+                      required
+                      minLength={12}
+                    />
+                    <button
+                      type="button"
+                      className="form-input-addon"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      title={showNewPassword ? "Hide password" : "Show password"}
+                      aria-label={showNewPassword ? "Hide new password" : "Show new password"}
+                    >
+                      {showNewPassword ? "👁️" : "👁️‍🗨️"}
+                    </button>
+                  </div>
+                  {newPassword && (
+                    <div style={{ marginTop: "0.5rem" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", marginBottom: "0.25rem" }}>
+                        <span style={{ color: "var(--text-muted)" }}>Strength</span>
+                        <span style={{ color: newPasswordStrength.color, fontWeight: 600 }}>{newPasswordStrength.label}</span>
+                      </div>
+                      <div style={{ height: "4px", background: "rgba(255,255,255,0.08)", borderRadius: "2px", overflow: "hidden" }}>
+                        <div
+                          style={{
+                            height: "100%",
+                            width: `${newPasswordStrength.score}%`,
+                            background: newPasswordStrength.color,
+                            transition: "width 0.3s ease",
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Confirm New Password</label>
-                  <input
-                    type="password"
-                    className="form-input"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    required
-                  />
+                  <div className="form-label">
+                    <label htmlFor="settings-confirm-pwd">Confirm New Password</label>
+                    {confirmPassword && (
+                      <span style={{ fontSize: "0.75rem", color: newPassword === confirmPassword ? "var(--accent-emerald)" : "var(--accent-rose)" }}>
+                        {newPassword === confirmPassword ? "✓ Passwords match" : "✕ Passwords do not match"}
+                      </span>
+                    )}
+                  </div>
+                  <div className="form-input-wrapper">
+                    <input
+                      id="settings-confirm-pwd"
+                      type={showConfirmPassword ? "text" : "password"}
+                      className="form-input"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      disabled={passwordLoading}
+                      placeholder="••••••••••••"
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="form-input-addon"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      title={showConfirmPassword ? "Hide password" : "Show password"}
+                      aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                    >
+                      {showConfirmPassword ? "👁️" : "👁️‍🗨️"}
+                    </button>
+                  </div>
                 </div>
 
-                <button type="submit" className="btn btn-primary" disabled={passwordLoading}>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={passwordLoading || newPassword.length < 12 || newPassword !== confirmPassword}
+                >
                   {passwordLoading ? <div className="spinner" /> : "Update Password"}
                 </button>
               </form>
@@ -390,26 +514,41 @@ export default function SettingsView({ initialSubTab = "password", onNavigateTab
               {emailStep === 1 ? (
                 <form onSubmit={handleRequestEmailChange}>
                   <div className="form-group">
-                    <label className="form-label">New Email Address</label>
+                    <label className="form-label" htmlFor="settings-new-email">New Email Address</label>
                     <input
+                      id="settings-new-email"
                       type="email"
                       className="form-input"
                       placeholder="newemail@example.com"
                       value={newEmail}
                       onChange={(e) => setNewEmail(e.target.value)}
                       required
+                      autoFocus
                     />
                   </div>
 
                   <div className="form-group">
-                    <label className="form-label">Current Password</label>
-                    <input
-                      type="password"
-                      className="form-input"
-                      value={emailCurrentPassword}
-                      onChange={(e) => setEmailCurrentPassword(e.target.value)}
-                      required
-                    />
+                    <label className="form-label" htmlFor="settings-email-pwd">Current Password</label>
+                    <div className="form-input-wrapper">
+                      <input
+                        id="settings-email-pwd"
+                        type={showEmailCurrentPassword ? "text" : "password"}
+                        className="form-input"
+                        placeholder="••••••••••••"
+                        value={emailCurrentPassword}
+                        onChange={(e) => setEmailCurrentPassword(e.target.value)}
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="form-input-addon"
+                        onClick={() => setShowEmailCurrentPassword(!showEmailCurrentPassword)}
+                        title={showEmailCurrentPassword ? "Hide password" : "Show password"}
+                        aria-label={showEmailCurrentPassword ? "Hide password" : "Show password"}
+                      >
+                        {showEmailCurrentPassword ? "👁️" : "👁️‍🗨️"}
+                      </button>
+                    </div>
                   </div>
 
                   <button type="submit" className="btn btn-primary" disabled={emailLoading}>
@@ -419,14 +558,17 @@ export default function SettingsView({ initialSubTab = "password", onNavigateTab
               ) : (
                 <form onSubmit={handleVerifyEmailChange}>
                   <div className="form-group">
-                    <label className="form-label">Verification Code sent to {newEmail}</label>
+                    <label className="form-label" htmlFor="settings-email-otp">
+                      Verification Code sent to {newEmail}
+                    </label>
                     <input
+                      id="settings-email-otp"
                       type="text"
                       className="form-input mono"
                       placeholder="123456"
                       maxLength={6}
                       value={emailOtp}
-                      onChange={(e) => setEmailOtp(e.target.value)}
+                      onChange={(e) => setEmailOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
                       style={{ textAlign: "center", fontSize: "1.25rem", letterSpacing: "0.2em" }}
                       required
                       autoFocus
@@ -465,6 +607,8 @@ export default function SettingsView({ initialSubTab = "password", onNavigateTab
                   background: "var(--bg-input)",
                   borderRadius: "var(--radius-md)",
                   border: "1px solid var(--border-subtle)",
+                  flexWrap: "wrap",
+                  gap: "0.75rem",
                 }}
               >
                 <div>
@@ -515,7 +659,11 @@ export default function SettingsView({ initialSubTab = "password", onNavigateTab
                   </p>
                 </div>
 
-                <button className="btn btn-danger btn-sm" onClick={handleLogoutAllDevices}>
+                <button
+                  className="btn btn-danger btn-sm"
+                  onClick={() => setRevokeAllModalOpen(true)}
+                  disabled={sessions.length === 0}
+                >
                   Revoke All Other Devices
                 </button>
               </div>
@@ -541,6 +689,8 @@ export default function SettingsView({ initialSubTab = "password", onNavigateTab
                         background: "var(--bg-input)",
                         borderRadius: "var(--radius-md)",
                         border: "1px solid var(--border-subtle)",
+                        flexWrap: "wrap",
+                        gap: "0.5rem",
                       }}
                     >
                       <div>
@@ -555,8 +705,9 @@ export default function SettingsView({ initialSubTab = "password", onNavigateTab
                       <button
                         className="btn btn-secondary btn-sm"
                         onClick={() => handleRevokeSession(sess.id)}
+                        disabled={sessionActionId === sess.id}
                       >
-                        Revoke
+                        {sessionActionId === sess.id ? <div className="spinner" style={{ width: "14px", height: "14px" }} /> : "Revoke"}
                       </button>
                     </div>
                   ))}
@@ -589,6 +740,10 @@ export default function SettingsView({ initialSubTab = "password", onNavigateTab
         onClose={() => {
           setMfaModalOpen(false);
           setMfaRecoveryCodes(null);
+          setMfaQrCode(null);
+          setMfaVerifyCode("");
+          setMfaConfirmPassword("");
+          setMfaConfirmCode("");
         }}
         title={
           mfaAction === "setup"
@@ -638,14 +793,15 @@ export default function SettingsView({ initialSubTab = "password", onNavigateTab
             )}
             <form onSubmit={handleVerifyMFASetup}>
               <div className="form-group">
-                <label className="form-label">6-Digit Code</label>
+                <label className="form-label" htmlFor="mfa-verify-code">6-Digit Code</label>
                 <input
+                  id="mfa-verify-code"
                   type="text"
                   className="form-input mono"
                   placeholder="123456"
                   maxLength={6}
                   value={mfaVerifyCode}
-                  onChange={(e) => setMfaVerifyCode(e.target.value.replace(/\D/g, ""))}
+                  onChange={(e) => setMfaVerifyCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                   style={{ textAlign: "center", fontSize: "1.25rem", letterSpacing: "0.2em" }}
                   required
                   autoFocus
@@ -659,24 +815,38 @@ export default function SettingsView({ initialSubTab = "password", onNavigateTab
         ) : (
           <form onSubmit={mfaAction === "disable" ? handleDisableMFA : handleRegenerateCodes}>
             <div className="form-group">
-              <label className="form-label">Account Password</label>
-              <input
-                type="password"
-                className="form-input"
-                value={mfaConfirmPassword}
-                onChange={(e) => setMfaConfirmPassword(e.target.value)}
-                required
-              />
+              <label className="form-label" htmlFor="mfa-confirm-pwd">Account Password</label>
+              <div className="form-input-wrapper">
+                <input
+                  id="mfa-confirm-pwd"
+                  type={showMfaConfirmPassword ? "text" : "password"}
+                  className="form-input"
+                  placeholder="••••••••••••"
+                  value={mfaConfirmPassword}
+                  onChange={(e) => setMfaConfirmPassword(e.target.value)}
+                  required
+                />
+                <button
+                  type="button"
+                  className="form-input-addon"
+                  onClick={() => setShowMfaConfirmPassword(!showMfaConfirmPassword)}
+                  title={showMfaConfirmPassword ? "Hide password" : "Show password"}
+                  aria-label={showMfaConfirmPassword ? "Hide password" : "Show password"}
+                >
+                  {showMfaConfirmPassword ? "👁️" : "👁️‍🗨️"}
+                </button>
+              </div>
             </div>
             <div className="form-group">
-              <label className="form-label">6-Digit Authenticator Code</label>
+              <label className="form-label" htmlFor="mfa-confirm-code">6-Digit Authenticator Code</label>
               <input
+                id="mfa-confirm-code"
                 type="text"
                 className="form-input mono"
                 placeholder="123456"
                 maxLength={6}
                 value={mfaConfirmCode}
-                onChange={(e) => setMfaConfirmCode(e.target.value.replace(/\D/g, ""))}
+                onChange={(e) => setMfaConfirmCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                 style={{ textAlign: "center", fontSize: "1.25rem", letterSpacing: "0.2em" }}
                 required
               />
@@ -695,7 +865,11 @@ export default function SettingsView({ initialSubTab = "password", onNavigateTab
       {/* DELETE ACCOUNT MODAL */}
       <Modal
         isOpen={deleteModalOpen}
-        onClose={() => setDeleteModalOpen(false)}
+        onClose={() => {
+          setDeleteModalOpen(false);
+          setDeletePassword("");
+          setDeleteMfaCode("");
+        }}
         title="Delete Account Confirmation"
         maxWidth="440px"
       >
@@ -705,26 +879,40 @@ export default function SettingsView({ initialSubTab = "password", onNavigateTab
           </p>
 
           <div className="form-group">
-            <label className="form-label">Account Password</label>
-            <input
-              type="password"
-              className="form-input"
-              value={deletePassword}
-              onChange={(e) => setDeletePassword(e.target.value)}
-              required
-            />
+            <label className="form-label" htmlFor="delete-account-pwd">Account Password</label>
+            <div className="form-input-wrapper">
+              <input
+                id="delete-account-pwd"
+                type={showDeletePassword ? "text" : "password"}
+                className="form-input"
+                placeholder="••••••••••••"
+                value={deletePassword}
+                onChange={(e) => setDeletePassword(e.target.value)}
+                required
+              />
+              <button
+                type="button"
+                className="form-input-addon"
+                onClick={() => setShowDeletePassword(!showDeletePassword)}
+                title={showDeletePassword ? "Hide password" : "Show password"}
+                aria-label={showDeletePassword ? "Hide password" : "Show password"}
+              >
+                {showDeletePassword ? "👁️" : "👁️‍🗨️"}
+              </button>
+            </div>
           </div>
 
           {user?.mfaEnabled && (
             <div className="form-group">
-              <label className="form-label">6-Digit Authenticator Code</label>
+              <label className="form-label" htmlFor="delete-account-mfa">6-Digit Authenticator Code</label>
               <input
+                id="delete-account-mfa"
                 type="text"
                 className="form-input mono"
                 placeholder="123456"
                 maxLength={6}
                 value={deleteMfaCode}
-                onChange={(e) => setDeleteMfaCode(e.target.value.replace(/\D/g, ""))}
+                onChange={(e) => setDeleteMfaCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                 style={{ textAlign: "center", fontSize: "1.25rem", letterSpacing: "0.2em" }}
                 required
               />
@@ -738,6 +926,18 @@ export default function SettingsView({ initialSubTab = "password", onNavigateTab
           </div>
         </form>
       </Modal>
+
+      {/* REVOKE ALL SESSIONS CONFIRMATION MODAL */}
+      <ConfirmModal
+        isOpen={revokeAllModalOpen}
+        onClose={() => setRevokeAllModalOpen(false)}
+        onConfirm={handleLogoutAllDevices}
+        title="Revoke All Other Sessions"
+        message="Are you sure you want to revoke all other active sessions? All other logged-in devices will be signed out immediately."
+        confirmText="Revoke All Devices"
+        confirmVariant="danger"
+        loading={revokeAllLoading}
+      />
     </div>
   );
 }

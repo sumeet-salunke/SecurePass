@@ -1,6 +1,12 @@
-import { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { setAccessToken as saveAccessToken, clearAccessToken } from "../api/token.js";
-import { refreshToken, login as apiLogin, logout as apiLogout, verifyMFALogin as apiVerifyMFALogin, verifyRecoveryCodeLogin as apiVerifyRecoveryLogin } from "../api/authApi.js";
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
+import { setAccessToken as saveAccessToken, clearAccessToken, subscribeAccessToken } from "../api/token.js";
+import {
+  refreshToken,
+  login as apiLogin,
+  logout as apiLogout,
+  verifyMFALogin as apiVerifyMFALogin,
+  verifyRecoveryCodeLogin as apiVerifyRecoveryLogin,
+} from "../api/authApi.js";
 
 const AuthContext = createContext(null);
 
@@ -8,63 +14,83 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [accessToken, setAccessTokenState] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [mfaChallenge, setMfaChallenge] = useState(null); // { mfaRequired: true, mfaChallengeToken: "..." }
+  const [mfaChallenge, setMfaChallenge] = useState(null); // { mfaRequired: true, mfaChallengeToken: "...", email: "..." }
+  const isRestoringRef = useRef(false);
 
   const setAccessToken = useCallback((token) => {
     setAccessTokenState(token);
     saveAccessToken(token);
   }, []);
 
-  const isAuthenticated = Boolean(user && accessToken);
+  const parseJwtPayload = (token) => {
+    try {
+      const base64Url = token.split(".")[1];
+      if (!base64Url) return null;
+      const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+      const jsonPayload = decodeURIComponent(
+        window
+          .atob(base64)
+          .split("")
+          .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+          .join("")
+      );
+      return JSON.parse(jsonPayload);
+    } catch {
+      return null;
+    }
+  };
+
+  // Sync state if token is cleared externally (e.g. 401 interceptor)
+  useEffect(() => {
+    const unsubscribe = subscribeAccessToken((token) => {
+      if (!token) {
+        setAccessTokenState(null);
+        setUser(null);
+      } else {
+        setAccessTokenState(token);
+      }
+    });
+    return unsubscribe;
+  }, []);
+
+  const restoreSession = useCallback(async () => {
+    if (isRestoringRef.current) return;
+    isRestoringRef.current = true;
+
+    try {
+      const response = await refreshToken();
+      const token = response?.data?.accessToken;
+      if (token) {
+        setAccessToken(token);
+        if (response.data.user) {
+          setUser(response.data.user);
+        } else {
+          const payload = parseJwtPayload(token);
+          setUser({
+            id: payload?.userId || "user",
+            email: payload?.email || "",
+            name: payload?.name || "SecurePass User",
+          });
+        }
+      } else {
+        clearAccessToken();
+        setUser(null);
+        setAccessTokenState(null);
+      }
+    } catch {
+      clearAccessToken();
+      setUser(null);
+      setAccessTokenState(null);
+    } finally {
+      isRestoringRef.current = false;
+      setLoading(false);
+    }
+  }, [setAccessToken]);
 
   // Restore session on application load via HTTP-only refresh cookie
   useEffect(() => {
-    let isMounted = true;
-    const restoreSession = async () => {
-      try {
-        const response = await refreshToken();
-        if (isMounted && response?.data?.accessToken) {
-          setAccessToken(response.data.accessToken);
-          // If the refresh response includes user details, store them; otherwise decode or placeholder
-          if (response.data.user) {
-            setUser(response.data.user);
-          } else {
-            // Reconstruct minimal user from JWT or subsequent fetch
-            try {
-              const base64Url = response.data.accessToken.split(".")[1];
-              const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-              const jsonPayload = decodeURIComponent(
-                window.atob(base64)
-                  .split("")
-                  .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
-                  .join("")
-              );
-              const payload = JSON.parse(jsonPayload);
-              setUser({ id: payload.userId, email: payload.email || "" });
-            } catch {
-              setUser({ id: "current-user" });
-            }
-          }
-        }
-      } catch {
-        // No active session
-        clearAccessToken();
-        if (isMounted) {
-          setUser(null);
-          setAccessTokenState(null);
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    };
-
     restoreSession();
-    return () => {
-      isMounted = false;
-    };
-  }, [setAccessToken]);
+  }, [restoreSession]);
 
   const loginUser = async (email, password) => {
     const res = await apiLogin({ email, password });
@@ -142,6 +168,8 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const isAuthenticated = Boolean(user && accessToken);
+
   return (
     <AuthContext.Provider
       value={{
@@ -157,6 +185,7 @@ export const AuthProvider = ({ children }) => {
         completeRecoveryLogin,
         cancelMFAChallenge,
         logoutUser,
+        refreshSession: restoreSession,
       }}
     >
       {children}

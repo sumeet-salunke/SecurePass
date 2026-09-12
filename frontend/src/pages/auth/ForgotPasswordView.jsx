@@ -2,6 +2,7 @@ import { useState } from "react";
 import { forgotPassword, resetPassword } from "../../api/authApi.js";
 import { useToast } from "../../context/ToastContext.jsx";
 import { calculatePasswordStrength } from "../../utils/crypto.js";
+import { formatErrorMessage } from "../../utils/errors.js";
 
 export default function ForgotPasswordView({ onSwitchToLogin }) {
   const toast = useToast();
@@ -17,22 +18,35 @@ export default function ForgotPasswordView({ onSwitchToLogin }) {
   const [error, setError] = useState("");
 
   const strength = calculatePasswordStrength(newPassword);
+  const hasMinLength = newPassword.length >= 12;
+  const passwordsMatch = newPassword.length > 0 && newPassword === confirmPassword;
+
+  const handleOtpPaste = (e) => {
+    e.preventDefault();
+    const text = (e.clipboardData || window.clipboardData).getData("text");
+    const digits = text.replace(/\D/g, "").slice(0, 6);
+    if (digits) {
+      setOtp(digits);
+      if (error) setError("");
+    }
+  };
 
   const handleRequestOtp = async (e) => {
     e.preventDefault();
-    if (!email) {
-      setError("Please enter your email address.");
+    const cleanEmail = email.trim();
+    if (!cleanEmail) {
+      setError("Please enter your account email address.");
       return;
     }
 
     try {
       setLoading(true);
       setError("");
-      const res = await forgotPassword({ email });
+      const res = await forgotPassword({ email: cleanEmail });
       toast.info(res?.message || "If an account exists, a reset code was sent to your email.");
       setStep(2);
     } catch (err) {
-      const errMsg = err.response?.data?.message || err.message || "Failed to send reset code.";
+      const errMsg = formatErrorMessage(err, "Failed to send reset code. Please try again.");
       setError(errMsg);
     } finally {
       setLoading(false);
@@ -42,7 +56,12 @@ export default function ForgotPasswordView({ onSwitchToLogin }) {
   const handleResetPassword = async (e) => {
     e.preventDefault();
 
-    if (newPassword.length < 12) {
+    if (otp.length !== 6) {
+      setError("Please enter the complete 6-digit reset code.");
+      return;
+    }
+
+    if (!hasMinLength) {
       setError("New password must be at least 12 characters long.");
       return;
     }
@@ -55,11 +74,12 @@ export default function ForgotPasswordView({ onSwitchToLogin }) {
     try {
       setLoading(true);
       setError("");
-      const res = await resetPassword({ email, otp, newPassword });
+      const cleanEmail = email.trim();
+      const res = await resetPassword({ email: cleanEmail, otp, newPassword });
       toast.success(res?.message || "Password reset successful! You can now sign in.");
       onSwitchToLogin();
     } catch (err) {
-      const errMsg = err.response?.data?.message || err.message || "Password reset failed. Check your OTP.";
+      const errMsg = formatErrorMessage(err, "Password reset failed. Check your OTP.");
       setError(errMsg);
     } finally {
       setLoading(false);
@@ -79,7 +99,7 @@ export default function ForgotPasswordView({ onSwitchToLogin }) {
       </div>
 
       {error && (
-        <div className="toast-card toast-error" style={{ marginBottom: "1.25rem", width: "100%", maxWidth: "100%" }}>
+        <div className="toast-card toast-error" role="alert" aria-live="assertive" style={{ marginBottom: "1.25rem", width: "100%", maxWidth: "100%" }}>
           <div className="toast-icon">✕</div>
           <div className="toast-content">
             <p className="toast-message">{error}</p>
@@ -114,9 +134,20 @@ export default function ForgotPasswordView({ onSwitchToLogin }) {
       ) : (
         <form onSubmit={handleResetPassword}>
           <div className="form-group">
-            <label className="form-label" htmlFor="reset-otp">
-              6-Digit Reset Code
-            </label>
+            <div className="form-label">
+              <label htmlFor="reset-otp">6-Digit Reset Code sent to {email}</label>
+              <button
+                type="button"
+                className="btn-ghost"
+                style={{ fontSize: "0.75rem", padding: 0, color: "var(--accent-sky)" }}
+                onClick={() => {
+                  setError("");
+                  setStep(1);
+                }}
+              >
+                Change email
+              </button>
+            </div>
             <div className="form-input-wrapper">
               <input
                 id="reset-otp"
@@ -125,7 +156,12 @@ export default function ForgotPasswordView({ onSwitchToLogin }) {
                 placeholder="123456"
                 value={otp}
                 maxLength={6}
-                onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+                onChange={(e) => {
+                  setOtp(e.target.value.replace(/\D/g, "").slice(0, 6));
+                  if (error) setError("");
+                }}
+                onPaste={handleOtpPaste}
+                disabled={loading}
                 style={{ textAlign: "center", fontSize: "1.25rem", letterSpacing: "0.2em" }}
                 required
                 autoFocus
@@ -145,6 +181,7 @@ export default function ForgotPasswordView({ onSwitchToLogin }) {
                 placeholder="••••••••••••"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
+                disabled={loading}
                 required
                 minLength={12}
               />
@@ -152,6 +189,8 @@ export default function ForgotPasswordView({ onSwitchToLogin }) {
                 type="button"
                 className="form-input-addon"
                 onClick={() => setShowPassword(!showPassword)}
+                title={showPassword ? "Hide password" : "Show password"}
+                aria-label={showPassword ? "Hide password" : "Show password"}
               >
                 {showPassword ? "👁️" : "👁️‍🗨️"}
               </button>
@@ -178,9 +217,14 @@ export default function ForgotPasswordView({ onSwitchToLogin }) {
           </div>
 
           <div className="form-group">
-            <label className="form-label" htmlFor="reset-confirm-password">
-              Confirm New Password
-            </label>
+            <div className="form-label">
+              <label htmlFor="reset-confirm-password">Confirm New Password</label>
+              {confirmPassword && (
+                <span style={{ fontSize: "0.75rem", color: passwordsMatch ? "var(--accent-emerald)" : "var(--accent-rose)" }}>
+                  {passwordsMatch ? "✓ Passwords match" : "✕ Passwords do not match"}
+                </span>
+              )}
+            </div>
             <div className="form-input-wrapper">
               <input
                 id="reset-confirm-password"
@@ -189,12 +233,26 @@ export default function ForgotPasswordView({ onSwitchToLogin }) {
                 placeholder="••••••••••••"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
+                disabled={loading}
                 required
               />
+              <button
+                type="button"
+                className="form-input-addon"
+                onClick={() => setShowPassword(!showPassword)}
+                title={showPassword ? "Hide password" : "Show password"}
+                aria-label={showPassword ? "Hide confirm password" : "Show confirm password"}
+              >
+                {showPassword ? "👁️" : "👁️‍🗨️"}
+              </button>
             </div>
           </div>
 
-          <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
+          <button
+            type="submit"
+            className="btn btn-primary btn-block"
+            disabled={loading || otp.length !== 6 || !hasMinLength || !passwordsMatch}
+          >
             {loading ? <div className="spinner" /> : "Save New Password"}
           </button>
         </form>

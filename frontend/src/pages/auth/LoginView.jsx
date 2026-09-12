@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
+import { formatErrorMessage } from "../../utils/errors.js";
 
 export default function LoginView({ onSwitchToRegister, onSwitchToForgotPassword, onUnverifiedEmail }) {
   const { loginUser } = useAuth();
@@ -14,15 +15,16 @@ export default function LoginView({ onSwitchToRegister, onSwitchToForgotPassword
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!email || !password) {
-      setError("Please fill in all fields.");
+    const cleanEmail = email.trim();
+    if (!cleanEmail || !password) {
+      setError("Please enter both email address and password.");
       return;
     }
 
     try {
       setLoading(true);
       setError("");
-      const result = await loginUser(email, password);
+      const result = await loginUser(cleanEmail, password);
 
       if (result?.mfaRequired) {
         toast.info("Multi-Factor Authentication required.");
@@ -30,12 +32,12 @@ export default function LoginView({ onSwitchToRegister, onSwitchToForgotPassword
         toast.success("Welcome back to SecurePass!");
       }
     } catch (err) {
-      const errMsg = err.response?.data?.message || err.message || "Login failed. Please check your credentials.";
+      const errMsg = formatErrorMessage(err, "Login failed. Please check your credentials.");
       setError(errMsg);
 
-      // If the backend returns account not verified, allow switching to verify OTP
+      // If the backend returns account not verified (403), allow switching to verify OTP
       if (err.response?.status === 403 && errMsg.toLowerCase().includes("verify")) {
-        onUnverifiedEmail(email);
+        onUnverifiedEmail(cleanEmail);
       }
     } finally {
       setLoading(false);
@@ -51,7 +53,7 @@ export default function LoginView({ onSwitchToRegister, onSwitchToForgotPassword
       </div>
 
       {error && (
-        <div className="toast-card toast-error" style={{ marginBottom: "1.25rem", width: "100%", maxWidth: "100%" }}>
+        <div className="toast-card toast-error" role="alert" aria-live="assertive" style={{ marginBottom: "1.25rem", width: "100%", maxWidth: "100%" }}>
           <div className="toast-icon">✕</div>
           <div className="toast-content">
             <p className="toast-message">{error}</p>

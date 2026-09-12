@@ -48,8 +48,6 @@ app.use("/api/auth", authRoutes);
 app.use("/api/vault", vaultRoutes);
 app.use("/api/password-generator", passwordGeneratorRoutes);
 
-
-
 app.get("/", (req, res) => {
   res.status(200).json({
     success: true,
